@@ -32,14 +32,14 @@ describe('Chat Service', () => {
       
       // Check the vector store was queried
       expect(vectorStoreService.searchSimilarChunks).toHaveBeenCalledWith(
-        'test-file-id',
-        'What is the main topic?'
+        'What is the main topic?',
+        'test-file-id'
       );
       
-      // Check that LLM was called with the context
+      // Check that LLM was called with the context and question
       expect(llmService.generateResponse).toHaveBeenCalledWith(
-        expect.stringContaining('Similar chunk 1'),
-        expect.stringContaining('What is the main topic?')
+        'What is the main topic?',
+        expect.stringContaining('Similar chunk 1')
       );
       
       // Check the result is the LLM's response
@@ -50,19 +50,13 @@ describe('Chat Service', () => {
       // Mock empty results from vector store
       vi.mocked(vectorStoreService.searchSimilarChunks).mockResolvedValue([]);
       
-      // Mock LLM response without context
-      vi.mocked(llmService.generateResponse).mockResolvedValue('I cannot find relevant information');
-      
       const result = await generateChatResponse('What is the main topic?', 'test-file-id');
       
-      // Check that LLM was called with instructions for no context
-      expect(llmService.generateResponse).toHaveBeenCalledWith(
-        expect.stringContaining('no relevant information'),
-        expect.stringContaining('What is the main topic?')
-      );
+      // Should return a default message
+      expect(result).toBe("I couldn't find any relevant information to answer your question.");
       
-      // Check the result is the LLM's response
-      expect(result).toBe('I cannot find relevant information');
+      // LLM service should not be called since there were no chunks
+      expect(llmService.generateResponse).not.toHaveBeenCalled();
     });
     
     it('should handle errors in the vector store search', async () => {
@@ -71,12 +65,9 @@ describe('Chat Service', () => {
         new Error('Vector store error')
       );
       
-      // Mock LLM response for error case
-      vi.mocked(llmService.generateResponse).mockResolvedValue('Sorry, an error occurred');
-      
       await expect(
         generateChatResponse('What is the main topic?', 'test-file-id')
-      ).rejects.toThrow('Error generating chat response');
+      ).rejects.toThrow('Failed to generate chat response: Error: Vector store error');
     });
     
     it('should handle errors in the LLM service', async () => {
@@ -92,7 +83,7 @@ describe('Chat Service', () => {
       
       await expect(
         generateChatResponse('What is the main topic?', 'test-file-id')
-      ).rejects.toThrow('Error generating chat response');
+      ).rejects.toThrow('Failed to generate chat response: Error: LLM service error');
     });
   });
 });

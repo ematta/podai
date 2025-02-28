@@ -297,3 +297,21 @@ class VectorStoreService {
 
 // Export a singleton instance
 export const vectorStoreService = new VectorStoreService();
+
+/**
+ * Search for similar chunks based on a question
+ * @param question - The question to find similar chunks for
+ * @param fileId - The ID of the file to search in
+ * @returns Array of matching chunks with their similarity scores
+ */
+export async function searchSimilarChunks(question: string, fileId: string): Promise<{ text: string, score: number }[]> {
+  try {
+    const documents = await vectorStoreService.similaritySearch(fileId, question, 5);
+    return documents.map(doc => ({
+      text: doc.pageContent,
+      score: 0.9 // Placeholder score
+    }));
+  } catch (error) {
+    throw new Error(`Failed to search similar chunks: ${error}`);
+  }
+}

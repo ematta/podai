@@ -467,4 +467,5 @@ process.on('SIGINT', () => {
 });
 
 // Export for testing
+export { app };
 export default app;

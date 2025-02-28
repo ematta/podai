@@ -430,7 +430,7 @@ class LLMService {
   }
 
   // Stream-based RAG chat with PDF 
-  public async chatWithPdfStream(question: string, fileId: string): ReadableStream<Uint8Array> {
+  public async chatWithPdfStream(question: string, fileId: string): Promise<ReadableStream<Uint8Array>> {
     if (!question || !fileId) {
       throw new Error('Please provide both a question and a valid PDF ID.');
     }

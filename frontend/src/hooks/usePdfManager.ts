@@ -1,11 +1,6 @@
 import { useState } from 'react'
-import { PDFList } from '../types'
-
-// Define the ScriptResponse type locally since it needs specific fields
-interface ScriptResponse {
-  id: string;
-  script: string;
-}
+import api from '../services/api'
+import { ScriptResponse } from '../types/index'
 
 export const usePdfManager = () => {
   const [file, setFile] = useState<File | null>(null)
@@ -31,12 +26,8 @@ export const usePdfManager = () => {
 
   const loadStoredPdfs = async () => {
     try {
-      const response = await fetch('http://localhost:8081/pdfs')
-      if (!response.ok) {
-        throw new Error('Failed to load PDFs')
-      }
-      const data = await response.json() as PDFList
-      setStoredPdfs(data.pdf_ids)
+      const data = await api.getStoredPdfs()
+      setStoredPdfs(data)
     } catch (error) {
       console.error('Failed to load PDFs:', error)
       setError('Failed to load stored PDFs')
@@ -66,7 +57,7 @@ export const usePdfManager = () => {
         if (xhr.status === 200) {
           const response = JSON.parse(xhr.responseText) as ScriptResponse
           setScript(response.script)
-          setCurrentPdfId(response.id)
+          setCurrentPdfId(response.id || '')
           loadStoredPdfs() // Refresh the list of PDFs
         } else {
           setError('Upload failed')
@@ -82,9 +73,12 @@ export const usePdfManager = () => {
       xhr.send(formData)
       
       return null // This function no longer returns the response data
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error uploading PDF:', error)
-      setError(error.message || 'Failed to upload PDF')
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to upload PDF'
+      setError(errorMessage)
       setIsLoading(false)
       return null
     }

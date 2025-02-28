@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
-import { ChatMessage } from '../types';
+import { ChatMessage } from '../types/index';
 
 interface ChatWindowProps {
   messages: ChatMessage[];

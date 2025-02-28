@@ -5,7 +5,7 @@ import ChatWindow from '../components/ChatWindow';
 import ProgressBar from '../components/ProgressBar';
 import TestUtils from '../components/TestUtils';
 import * as api from '../services/api';
-import { ChatMessage } from '../types';
+import { ChatMessage } from '../types/index';
 
 const ChatPage = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -49,9 +49,12 @@ const ChatPage = () => {
       
       setFileId(fileId);
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error uploading PDF:', err);
-      setError(err.message || 'Failed to upload PDF');
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : 'Failed to upload PDF';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -72,9 +75,12 @@ const ChatPage = () => {
       
       setFileId(fileId);
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error loading test PDF:', err);
-      setError(err.message || 'Failed to load test PDF');
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : 'Failed to load test PDF';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -160,11 +166,14 @@ const ChatPage = () => {
           inputRef.current.focus();
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error getting chat response:', err);
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : 'Failed to get a response';
       setChatMessages(prev => [...prev, {
         role: 'system',
-        content: `Error: ${err.message || 'Failed to get a response'}`
+        content: `Error: ${errorMessage}`
       }]);
       setIsChatLoading(false);
       

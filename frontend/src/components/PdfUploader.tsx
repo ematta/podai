@@ -19,8 +19,19 @@ const PdfUploader: React.FC<Props> = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-    // Reset file state by triggering a change event with no files
-    onFileChange({ target: { files: null } } as any);
+    
+    // Create a partial mock event with just the necessary properties
+    // This is a pragmatic approach that avoids using 'any' while focusing on what's actually needed
+    const mockEvent = {
+      target: {
+        files: null,
+        value: '',
+        name: fileInputRef.current?.name || 'file-upload',
+        type: 'file'
+      }
+    } as React.ChangeEvent<HTMLInputElement>;
+    
+    onFileChange(mockEvent);
   };
 
   return (

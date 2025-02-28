@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { ChatMessage } from '../types'
+import { ChatMessage } from '../types/index'
 
 export const useChat = (pdfId: string) => {
   const [messages, setMessages] = useState<ChatMessage[]>([])

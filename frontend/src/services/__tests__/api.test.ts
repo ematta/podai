@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as api from '../api';
 
 // Mock fetch globally
@@ -74,11 +74,16 @@ describe('API Service', () => {
         // Second call returns completed
         mockFetch.mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ progress: 100, message: 'Completed', status: 'completed' }),
+          json: () => Promise.resolve({
+            progress: 100,
+            status: 'completed',
+            message: 'Processing complete',
+            result: { answer: 'This is the answer' }
+          })
         });
 
         const progressCallback = vi.fn();
-        const result = await api.pollProgress('progress123', progressCallback, 10);
+        const result = await api.pollProgress('progress123', progressCallback);
 
         // Progress callback should be called with updates
         expect(progressCallback).toHaveBeenCalledWith(50, 'Processing');
@@ -113,7 +118,7 @@ describe('API Service', () => {
         
         // Verify that the promise rejects
         await expect(
-          api.pollProgress('progress123', progressCallback, 10)
+          api.pollProgress('progress123', progressCallback)
         ).rejects.toThrow('Failed to process');
       } finally {
         // Restore original console functions

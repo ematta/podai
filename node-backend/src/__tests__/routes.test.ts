@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import supertest from 'supertest';
-import { app } from '../server';
+import express from 'express';
+import app from '../server';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -51,14 +52,15 @@ vi.mock('fs', async () => {
 });
 
 describe('API Routes', () => {
-  const request = supertest(app);
+  let request;
+  
+  beforeEach(() => {
+    request = supertest(app);
+    vi.resetAllMocks();
+  });
   
   // Create a temporary file for testing
   const testPdfPath = path.resolve('./test-uploads/test.pdf');
-  
-  beforeEach(() => {
-    vi.resetAllMocks();
-  });
   
   describe('POST /api/upload', () => {
     it('should upload a PDF file and return a file ID', async () => {

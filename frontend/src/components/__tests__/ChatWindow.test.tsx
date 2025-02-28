@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import ChatWindow from '../ChatWindow';
-import { ChatMessage } from '../../types';
+import { ChatMessage } from '../../types/index';
 
 // Mock scrollIntoView function for testing scroll behavior
 beforeEach(() => {
