@@ -1,4 +1,4 @@
-.PHONY: setup install-backend install-frontend run-backend run-backend-low-tokens run-frontend run-all run-all-low-tokens clean test test-backend test-frontend test-frontend-unit test-frontend-e2e test-e2e test-all coverage-backend coverage-frontend coverage-all debug-backend debug-all setup-env build-backend build-frontend build-all
+.PHONY: setup install-backend install-frontend run-backend run-backend-low-tokens run-frontend run-all run-all-low-tokens clean test test-backend test-frontend test-frontend-unit test-frontend-e2e test-e2e test-all coverage-backend coverage-frontend coverage-all debug-backend debug-all setup-env build-backend build-frontend build-all profile-backend profile-backend-snapshot profile-frontend profile-all
 
 setup: install-backend install-frontend
 
@@ -98,3 +98,78 @@ build-frontend:
 
 build-all: build-backend build-frontend
 	@echo "Both backend and frontend built successfully!"
+
+# Memory profiling targets
+profile-backend:
+	@echo "Starting backend with memory profiling..."
+	cd node-backend && ENABLE_PROFILING=true PROFILE_INTERVAL=30000 NODE_OPTIONS="--max-old-space-size=4096" npm run dev
+
+profile-backend-snapshot:
+	@echo "Taking heap snapshot of the running backend..."
+	cd node-backend && node -e "require('./dist/scripts/profile-memory.js')"
+
+profile-frontend:
+	@echo "Starting frontend with memory profiling..."
+	cd frontend && VITE_ENABLE_PROFILING=true npm run dev
+
+profile-all:
+	@echo "Starting both backend and frontend with memory profiling..."
+	cd node-backend && ENABLE_PROFILING=true NODE_OPTIONS="--max-old-space-size=4096" npm run dev & \
+	cd frontend && VITE_ENABLE_PROFILING=true npm run dev
+
+# Docker commands
+.PHONY: docker-build docker-build-backend docker-build-frontend docker-up docker-down docker-logs docker-ps
+
+docker-build: docker-build-backend docker-build-frontend
+	@echo "Docker images built successfully!"
+
+docker-build-backend:
+	@echo "Building backend Docker image..."
+	docker-compose build backend
+
+docker-build-frontend:
+	@echo "Building frontend Docker image..."
+	docker-compose build frontend
+
+docker-up:
+	@echo "Starting Docker containers..."
+	docker-compose up -d
+
+docker-down:
+	@echo "Stopping Docker containers..."
+	docker-compose down
+
+docker-logs:
+	@echo "Showing Docker logs..."
+	docker-compose logs -f
+
+docker-ps:
+	@echo "Listing Docker containers..."
+	docker-compose ps
+
+# Kubernetes commands
+.PHONY: k8s-install k8s-upgrade k8s-uninstall k8s-status k8s-forward-backend k8s-forward-frontend
+
+k8s-install:
+	@echo "Installing Kubernetes resources..."
+	helm install podai ./kubernetes/charts/podai
+
+k8s-upgrade:
+	@echo "Upgrading Kubernetes resources..."
+	helm upgrade podai ./kubernetes/charts/podai
+
+k8s-uninstall:
+	@echo "Uninstalling Kubernetes resources..."
+	helm uninstall podai
+
+k8s-status:
+	@echo "Checking Kubernetes status..."
+	helm status podai
+
+k8s-forward-backend:
+	@echo "Port forwarding backend service to localhost:3000..."
+	kubectl port-forward svc/podai-backend 3000:3000
+
+k8s-forward-frontend:
+	@echo "Port forwarding frontend service to localhost:8080..."
+	kubectl port-forward svc/podai-frontend 8080:80

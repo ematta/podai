@@ -1,0 +1,23 @@
+Thank you for installing {{ .Chart.Name }}.
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get values {{ .Release.Name }}
+
+{{- if .Values.ingress.enabled }}
+You can access the application at:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+To access the application, you need to set up port forwarding:
+
+For the frontend:
+  kubectl port-forward svc/{{ .Values.frontend.name }} 8080:{{ .Values.frontend.service.port }} -n {{ .Release.Namespace }}
+
+For the backend API:
+  kubectl port-forward svc/{{ .Values.backend.name }} 3000:{{ .Values.backend.service.port }} -n {{ .Release.Namespace }}
+{{- end }}

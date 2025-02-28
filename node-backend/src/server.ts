@@ -17,6 +17,7 @@ import { pdfService } from './services/pdfService.js';
 import * as chatService from './services/chatService.js';
 import { upload, handleUploadError } from './utils/fileMiddleware.js';
 import { ProgressTracker } from './utils/progressTracker.js';
+import { getMemoryUsage } from './utils/profiler.js';
 import fileUploadRoutes from './routes/fileUploadRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import testRoutes from './routes/testRoutes.js';
@@ -570,10 +571,19 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 if (import.meta.url === `file://${process.argv[1]}`) {
   const PORT = settings.PORT;
   app.listen(PORT, () => {
-    logger.info(`Server running on port ${PORT}`);
-    logger.info(`Environment: ${settings.NODE_ENV}`);
-    logger.info(`Log level: ${settings.LOG_LEVEL}`);
-    logger.info(`Max upload size: ${settings.MAX_UPLOAD_SIZE / (1024 * 1024)}MB`);
+    logger.info(`Server is running on port ${PORT}`);
+    
+    // Log initial memory usage
+    if (process.env.ENABLE_PROFILING === 'true') {
+      const memoryUsage = getMemoryUsage();
+      logger.info('Initial memory usage:', memoryUsage);
+      
+      // Set up periodic memory usage logging (every 5 minutes)
+      setInterval(() => {
+        const currentMemory = getMemoryUsage();
+        logger.info('Current memory usage:', currentMemory);
+      }, 5 * 60 * 1000);
+    }
   });
 }
 

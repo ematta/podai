@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "profile:memory": "tsx src/scripts/profile-memory.js",
+    "profile:dev": "ENABLE_PROFILING=true NODE_OPTIONS='--max-old-space-size=4096' tsx watch src/server.ts"
   },
   "dependencies": {
     "@huggingface/inference": "^2.6.4",
