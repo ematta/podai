@@ -1,6 +1,6 @@
-import { searchSimilarChunks } from './vectorStoreService';
-import { generateResponse } from './llmService';
-import { createLogger } from '../config/logger';
+import { searchSimilarChunks } from './vectorStoreService.js';
+import { llmService } from './llmService.js';
+import { createLogger } from '../config/logger.js';
 
 const logger = createLogger('chat-service');
 
@@ -15,25 +15,10 @@ export async function generateChatResponse(question: string, fileId: string): Pr
   try {
     logger.info(`Generating chat response for question: "${question}" with file ID: ${fileId}`);
     
-    // Retrieve relevant chunks from the vector store
-    const similarChunks = await searchSimilarChunks(question, fileId);
-    
-    if (!similarChunks || similarChunks.length === 0) {
-      logger.warn(`No similar chunks found for question: "${question}"`);
-      return "I couldn't find any relevant information to answer your question.";
-    }
-    
-    // Build context from the chunks
-    const context = similarChunks
-      .map(chunk => chunk.text)
-      .join('\n\n');
-    
-    logger.info(`Found ${similarChunks.length} relevant chunks for context`);
-    
-    // Generate response using LLM with the retrieved context
-    const response = await generateResponse(question, context);
-    
+    // Use the chatWithPdf method from llmService directly since it handles context retrieval internally
+    const response = await llmService.chatWithPdf(question, fileId);
     return response;
+    
   } catch (error) {
     logger.error(`Error generating chat response: ${error}`);
     throw new Error(`Failed to generate chat response: ${error}`);

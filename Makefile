@@ -65,7 +65,7 @@ test-frontend-e2e:
 
 test-e2e:
 	@echo "Running end-to-end tests..."
-	cd frontend && npx playwright install --with-deps chromium && npm run test:headed
+	cd frontend && npx playwright install --with-deps chromium && npx playwright test --headed
 
 test-all: test-backend test-frontend-unit
 	@echo "All tests completed"
