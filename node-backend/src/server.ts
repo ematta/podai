@@ -14,6 +14,7 @@ import { createLogger } from './config/logger.js';
 import { settings } from './config/settings.js';
 import { llmService } from './services/llmService.js';
 import { pdfService } from './services/pdfService.js';
+import * as chatService from './services/chatService.js';
 import { upload, handleUploadError } from './utils/fileMiddleware.js';
 import { ProgressTracker } from './utils/progressTracker.js';
 import fileUploadRoutes from './routes/fileUploadRoutes.js';
