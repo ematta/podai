@@ -4,30 +4,28 @@ setup: install-backend install-frontend
 
 setup-env:
 	@echo "Setting up environment variables..."
-	@if [ ! -f backend/.env ]; then \
-		cp backend/.env.example backend/.env; \
-		echo "Created .env file. Please edit backend/.env and add your Hugging Face API token"; \
+	@if [ ! -f node-backend/.env ]; then \
+		cp node-backend/.env.example node-backend/.env; \
+		echo "Created .env file. Please edit node-backend/.env and add your Hugging Face API token"; \
 	else \
-		echo "backend/.env already exists"; \
+		echo "node-backend/.env already exists"; \
 	fi
 
 install-backend:
-	@echo "Installing Python dependencies..."
-	cd backend && pip install -r requirements.txt
+	@echo "Installing Node.js backend dependencies..."
+	cd node-backend && npm install
 
 install-frontend:
 	@echo "Installing Node.js dependencies..."
 	cd frontend && npm install --legacy-peer-deps
 
 run-backend:
-	@echo "Starting backend server..."
-	cd backend && source venv/bin/activate && flask run --port=8081
+	@echo "Starting Node.js backend server..."
+	cd node-backend && npm run dev
 
 debug-backend:
-	@echo "Starting backend server in DEBUG mode..."
-	cd backend && source venv/bin/activate && \
-	FLASK_APP=app.py FLASK_ENV=development FLASK_DEBUG=1 \
-	python -m flask run --host=0.0.0.0 --port=8081 --debugger --reload
+	@echo "Starting Node.js backend server in DEBUG mode..."
+	cd node-backend && NODE_ENV=development LOG_LEVEL=debug npm run dev
 
 run-frontend:
 	@echo "Starting frontend development server..."
@@ -43,19 +41,15 @@ debug-all:
 
 test-backend:
 	@echo "Running backend tests..."
-	cd backend && source venv/bin/activate && python -m pytest
+	cd node-backend && npm test
 
 test-e2e:
 	@echo "Running end-to-end tests..."
-	cd backend && source venv/bin/activate && python -m pytest tests/test_e2e.py -v
-
-test:
-	cd backend && \
-	pytest -v --cov=src --cov-report=term-missing --cov-report=html:coverage_report
+	cd node-backend && npm test -- "__tests__/e2e/**/*.test.ts"
 
 clean:
-	@echo "Cleaning project..."
+	@echo "Cleaning up..."
+	rm -rf node-backend/dist
+	rm -rf frontend/dist
+	rm -rf node-backend/node_modules
 	rm -rf frontend/node_modules
-	rm -rf backend/__pycache__
-	rm -rf backend/instance
-	rm -rf backend/uploads/*
