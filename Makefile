@@ -49,11 +49,13 @@ debug-all:
 
 test-backend:
 	@echo "Running backend tests..."
-	cd node-backend && npm test
+	docker-compose build backend-test
+	docker-compose run --rm backend-test
 
 test-frontend:
 	@echo "Running frontend tests..."
-	cd frontend && npm run test
+	docker-compose build frontend-test
+	docker-compose run --rm frontend-test
 
 test-frontend-unit:
 	@echo "Running frontend unit tests only..."
@@ -61,13 +63,17 @@ test-frontend-unit:
 
 test-frontend-e2e:
 	@echo "Running frontend end-to-end tests only..."
-	cd frontend && npx playwright test
+	docker-compose build frontend-test
+	docker-compose run --rm frontend-test npm run test:e2e
 
 test-e2e:
 	@echo "Running end-to-end tests..."
 	cd frontend && npx playwright install --with-deps chromium && npx playwright test --headed
 
-test-all: test-backend test-frontend-unit
+test-all:
+	@echo "Running all tests..."
+	make test-backend
+	make test-frontend
 	@echo "All tests completed"
 
 coverage-backend:
@@ -106,7 +112,7 @@ profile-backend:
 
 profile-backend-snapshot:
 	@echo "Taking heap snapshot of the running backend..."
-	cd node-backend && node -e "require('./dist/scripts/profile-memory.js')"
+	cd node-backend && npx tsx src/scripts/profile-memory.ts
 
 profile-frontend:
 	@echo "Starting frontend with memory profiling..."

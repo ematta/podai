@@ -17,7 +17,7 @@ import { pdfService } from './services/pdfService.js';
 import * as chatService from './services/chatService.js';
 import { upload, handleUploadError } from './utils/fileMiddleware.js';
 import { ProgressTracker } from './utils/progressTracker.js';
-import { getMemoryUsage } from './utils/profiler.js';
+import { getMemoryUsage } from './utils/profiler.js'; 
 import fileUploadRoutes from './routes/fileUploadRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import testRoutes from './routes/testRoutes.js';

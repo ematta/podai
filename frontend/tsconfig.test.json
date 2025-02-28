@@ -23,5 +23,5 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["tests"]
+  "include": ["tests", "tests/**/*.ts", "tests/**/*.tsx"]
 }

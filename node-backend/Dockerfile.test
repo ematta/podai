@@ -1,0 +1,15 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies including dev dependencies for testing
+RUN npm ci
+
+# Copy source code and tests
+COPY . .
+
+# Run tests
+CMD ["npm", "test"]

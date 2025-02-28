@@ -25,7 +25,7 @@ type MemoryLogEntry = {
 };
 
 let memoryLog: MemoryLogEntry[] = [];
-let profilingInterval: number | null = null;
+let profilingInterval: number | NodeJS.Timeout | null = null;
 
 /**
  * Format bytes to human-readable format
@@ -46,7 +46,7 @@ function formatBytes(bytes?: number): string {
  */
 export function getMemoryInfo(): MemoryInfo {
   // Check if performance.memory is available (Chrome only feature)
-  const performance = window.performance as any;
+  const performance = window.performance;
   
   if (performance && performance.memory) {
     const memory = performance.memory;
@@ -65,8 +65,7 @@ export function getMemoryInfo(): MemoryInfo {
     };
   }
   
-  // If performance.memory is not available
-  return {};
+  return {}; // Return empty object if memory info is not available
 }
 
 /**
@@ -234,7 +233,7 @@ export function createMemoryProfilerInterface(): HTMLElement {
   container.appendChild(buttonContainer);
   
   // Update memory display
-  let updateInterval: number;
+  let updateInterval: number | NodeJS.Timeout;
   
   function updateMemoryDisplay() {
     const memoryInfo = getMemoryInfo();
