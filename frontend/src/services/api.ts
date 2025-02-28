@@ -364,9 +364,6 @@ export default {
   uploadPdfWithEmbeddings,
   getRagChatResponse,
   pollProgress,
-  getChatResponse,
-  checkProgress,
-  pollForResults,
   getStoredPdfs,
   getScript,
   loadTestPdf

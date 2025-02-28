@@ -45,7 +45,7 @@ test-backend:
 
 test-e2e:
 	@echo "Running end-to-end tests..."
-	cd frontend && npm install @playwright/test && npx playwright install --with-deps chromium && npm run test:headed
+	cd frontend && npm install @playwright/test @types/node && npx tsc -p tsconfig.test.json --noEmit && npx playwright install --with-deps chromium && npm run test:headed
 
 clean:
 	@echo "Cleaning up..."

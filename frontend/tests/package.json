@@ -1,0 +1,10 @@
+{
+  "name": "podai-tests",
+  "version": "1.0.0",
+  "description": "End-to-end tests for PodAI",
+  "type": "commonjs",
+  "dependencies": {
+    "@playwright/test": "^1.43.0",
+    "@types/node": "^20.11.20"
+  }
+}

@@ -1,12 +1,13 @@
+import { useState, useRef, KeyboardEvent } from 'react';
 import { Box, Button, Container, Typography, Paper, Input } from '@mui/material';
-import { useState } from 'react';
 import PdfUploader from '../components/PdfUploader';
 import ChatWindow from '../components/ChatWindow';
 import ProgressBar from '../components/ProgressBar';
 import TestUtils from '../components/TestUtils';
 import * as api from '../services/api';
+import { ChatMessage } from '../types';
 
-const PodcastGenerator = () => {
+const ChatPage = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,6 +15,10 @@ const PodcastGenerator = () => {
   const [pdfId, setPdfId] = useState<string | null>(null);
   const [progress, setProgress] = useState<number>(0);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState<string>('');
+  const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files ? event.target.files[0] : null;
@@ -21,6 +26,7 @@ const PodcastGenerator = () => {
     setPdfId(null);
     setFileId(null);
     setError(null);
+    setChatMessages([]);
   };
 
   const handleUpload = async () => {
@@ -33,6 +39,7 @@ const PodcastGenerator = () => {
       setIsLoading(true);
       setError(null);
       setProgress(0);
+      setChatMessages([]);
       
       const { fileId } = await api.uploadPdfWithEmbeddings(selectedFile, (progress, message) => {
         setProgress(progress);
@@ -55,6 +62,7 @@ const PodcastGenerator = () => {
       setError(null);
       setProgress(0);
       setProgressMessage('Processing test PDF...');
+      setChatMessages([]);
       
       const { fileId } = await api.loadTestPdf(pdfPath, (progress, message) => {
         setProgress(progress);
@@ -68,6 +76,60 @@ const PodcastGenerator = () => {
       setError(err.message || 'Failed to load test PDF');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleChatSubmit = async () => {
+    if (!chatInput.trim() || !fileId || isChatLoading) return;
+    
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: chatInput
+    };
+    
+    setChatMessages(prev => [...prev, userMessage]);
+    setIsChatLoading(true);
+    setChatInput('');
+    
+    try {
+      // Add a placeholder message for the assistant that will be updated
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '...'
+      }]);
+      
+      const response = await api.getRagChatResponse(chatInput, fileId);
+      
+      // Replace the placeholder with the actual response
+      setChatMessages(prev => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1] = {
+          role: 'assistant',
+          content: response
+        };
+        return newMessages;
+      });
+      
+    } catch (err: any) {
+      console.error('Error getting chat response:', err);
+      setChatMessages(prev => [...prev, {
+        role: 'system',
+        content: `Error: ${err.message || 'Failed to get a response'}`
+      }]);
+    } finally {
+      setIsChatLoading(false);
+      
+      // Focus the chat input after sending
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }
+  };
+
+  const handleInputKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleChatSubmit();
     }
   };
 
@@ -139,8 +201,8 @@ const PodcastGenerator = () => {
           </Typography>
           
           <ChatWindow 
-            messages={[]} 
-            isLoading={isLoading} 
+            messages={chatMessages} 
+            isLoading={isChatLoading} 
             progress={progress}
           />
           
@@ -149,16 +211,21 @@ const PodcastGenerator = () => {
               fullWidth
               type="text"
               placeholder="Ask a question about the document..."
-              disabled={isLoading}
+              disabled={isLoading || isChatLoading}
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyPress={handleInputKeyPress}
+              inputRef={inputRef}
               data-testid="chat-input"
             />
             <Button 
               variant="contained" 
               color="primary"
-              disabled={isLoading}
+              disabled={isLoading || isChatLoading || !chatInput.trim()}
+              onClick={handleChatSubmit}
               data-testid="chat-send-button"
             >
-              {isLoading ? 'Loading...' : 'Send'}
+              {isChatLoading ? 'Sending...' : 'Send'}
             </Button>
           </Box>
         </Paper>
@@ -167,4 +234,4 @@ const PodcastGenerator = () => {
   );
 };
 
-export default PodcastGenerator;
+export default ChatPage;

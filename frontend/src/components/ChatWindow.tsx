@@ -68,6 +68,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 p: 2,
                 boxShadow: 1
               }}
+              className={`chat-message chat-message-${message.role}`}
             >
               <Typography 
                 variant="caption" 
@@ -77,6 +78,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                   display: 'block',
                   fontWeight: 'bold'
                 }}
+                className="chat-message-role"
               >
                 {message.role === 'user' 
                   ? 'You' 
@@ -91,6 +93,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word'
                 }}
+                className="chat-message-content"
+                data-testid="chat-message-content"
               >
                 {message.content}
               </Typography>

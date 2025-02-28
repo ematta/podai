@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
 
 test.describe('PDF Upload Test', () => {
-  test('should upload a PDF file and display success message', async ({ page }) => {
+  test('should upload a PDF file and display success message', async ({ page }: { page: Page }) => {
     // Navigate to the application
     await page.goto('/');
 
