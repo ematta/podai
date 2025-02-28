@@ -3,6 +3,12 @@ import json
 import os
 import sys
 import torch
+import atexit
+import gc
+import warnings
+import multiprocessing
+import multiprocessing.util
+import resource
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from src.config.settings import settings
 
@@ -15,6 +21,20 @@ class LLMService:
         self.temperature = settings.LLM_TEMPERATURE
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model_loaded = False
+        self.model = None
+        self.tokenizer = None
+        self.generator = None
+        
+        # Increase the limit for open files and resources
+        # This helps prevent "too many open files" errors
+        try:
+            # Get the current soft limit
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            # Set the soft limit to the maximum allowed hard limit
+            resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+            logger.info(f"Increased file limit from {soft} to {hard}")
+        except Exception as e:
+            logger.warning(f"Could not increase file limit: {e}")
         
         logger.info(f"Initializing LLM service for model: {self.model_name} on {self.device}")
         
@@ -29,31 +49,83 @@ class LLMService:
             
             if model_exists:
                 logger.info(f"Loading model and tokenizer. This might take a while...")
-                # Load model and tokenizer
-                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    self.model_name, 
-                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                    device_map=self.device
-                )
-                
-                # Create pipeline for text generation
-                self.generator = pipeline(
-                    "text-generation",
-                    model=self.model,
-                    tokenizer=self.tokenizer,
-                    max_length=self.max_length,
-                    temperature=self.temperature,
-                    device=0 if self.device == "cuda" else -1
-                )
-                
-                logger.info(f"Model and tokenizer loaded successfully.")
-                self.model_loaded = True
+                # Use a separate process for initialization to better isolate resources
+                self._initialize_model_safely()
             else:
                 logger.warning(f"Model {self.model_name} not found locally and not available on Hugging Face Hub. Using fallback mode.")
         except Exception as e:
             logger.error(f"Error loading model: {str(e)}")
             logger.warning("Using fallback mode for all LLM operations.")
+    
+    def _initialize_model_safely(self):
+        """Initialize the model in a way that better manages resources"""
+        try:
+            # Load tokenizer
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            
+            # Load model with appropriate settings
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_name, 
+                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                device_map=self.device,
+                # Set low_cpu_mem_usage to manage memory better
+                low_cpu_mem_usage=True
+            )
+            
+            # Create pipeline for text generation
+            self.generator = pipeline(
+                "text-generation",
+                model=self.model,
+                tokenizer=self.tokenizer,
+                max_length=self.max_length,
+                temperature=self.temperature,
+                device=0 if self.device == "cuda" else -1
+            )
+            
+            logger.info(f"Model and tokenizer loaded successfully.")
+            self.model_loaded = True
+            
+            # Register cleanup function
+            atexit.register(self._cleanup_resources)
+        except Exception as e:
+            logger.error(f"Error in model initialization: {e}")
+            raise
+    
+    def _cleanup_resources(self):
+        """Clean up resources to prevent semaphore leaks"""
+        logger.info("Cleaning up LLM resources...")
+        if self.model is not None:
+            # Free up GPU memory
+            if self.device == "cuda":
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    if hasattr(self.model, "to"):
+                        self.model.to("cpu")
+            
+            # Clear model references
+            self.model = None
+            self.tokenizer = None
+            self.generator = None
+            
+            # Force garbage collection
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            # Force exit functions to run
+            try:
+                multiprocessing.util._exit_function()
+            except Exception as e:
+                logger.warning(f"Error during multiprocessing cleanup: {e}")
+                
+        logger.info("LLM resources cleanup completed")
+    
+    def _cleanup_resources_context(self):
+        """Context manager for cleaning up resources"""
+        try:
+            yield
+        finally:
+            self._cleanup_resources()
     
     def _check_model_availability(self):
         """Check if a model is available on Hugging Face Hub"""
@@ -70,7 +142,36 @@ class LLMService:
             return self._fallback_generation(prompt)
             
         try:
-            outputs = self.generator(prompt, max_length=self.max_length, temperature=self.temperature)
+            from contextlib import contextmanager
+            
+            @contextmanager
+            def inference_context():
+                """Context manager for safely managing resources during inference"""
+                # Set up context
+                prev_state = torch.get_rng_state()
+                torch.manual_seed(42)  # Use a consistent seed for reproducibility
+                
+                try:
+                    # Make it no-grad for inference
+                    with torch.no_grad():
+                        yield
+                finally:
+                    # Clean up
+                    torch.set_rng_state(prev_state)
+                    # Force garbage collection after inference
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+            
+            # Use our context manager
+            with inference_context():
+                outputs = self.generator(
+                    prompt, 
+                    max_length=self.max_length, 
+                    temperature=self.temperature,
+                    num_return_sequences=1
+                )
+                
             return outputs[0]['generated_text']
         except Exception as e:
             logger.error(f"Error generating text: {str(e)}")

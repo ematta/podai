@@ -14,7 +14,7 @@ class Settings:
     
     # LLM settings
     HUGGINGFACE_API_TOKEN = os.getenv('HUGGINGFACE_API_TOKEN')
-    LLM_MODEL = "meta-llama/Meta-Llama-3.2-3B-Instruct"
+    LLM_MODEL = "ibm-granite/granite-3.2-8b-instruct"
     LLM_TEMPERATURE = 0.7
     LLM_MAX_LENGTH = 2048
 

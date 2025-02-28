@@ -6,6 +6,13 @@ from flask_cors import CORS
 import os
 import uuid
 import logging
+import atexit
+import gc
+import torch
+import signal
+import sys
+import multiprocessing
+import multiprocessing.util
 from werkzeug.utils import secure_filename
 from src.services.pdf_service import pdf_service
 from src.services.llm_service import llm_service
@@ -28,6 +35,44 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Store chat history in memory (consider using a database for production)
 chat_history = {}
+
+# Patch multiprocessing to avoid semaphore leaks
+# This forces the multiprocessing module to cleanup semaphores earlier
+original_register = multiprocessing.util.register_after_fork
+
+def patched_register_after_fork(obj, func):
+    if hasattr(obj, '__call__'):
+        original_register(obj, func)
+
+multiprocessing.util.register_after_fork = patched_register_after_fork
+
+# Setup graceful cleanup for resources
+def cleanup_resources(signal_received=None, frame=None):
+    """Cleanup function to handle application shutdown gracefully"""
+    logger.info("Application shutting down, cleaning up resources...")
+    
+    # Clear any cached objects
+    gc.collect()
+    
+    # Clear CUDA cache if available
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
+    # Aggressive cleanup for multiprocessing resources
+    try:
+        # Force cleanup of semaphores in multiprocessing
+        multiprocessing.util._exit_function()
+    except Exception as e:
+        logger.warning(f"Error during multiprocessing cleanup: {e}")
+    
+    # Clean up multiprocessing resources
+    if signal_received:
+        sys.exit(0)
+
+# Register the cleanup function for different signals
+signal.signal(signal.SIGINT, cleanup_resources)
+signal.signal(signal.SIGTERM, cleanup_resources)
+atexit.register(cleanup_resources)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'pdf'
