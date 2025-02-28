@@ -49,7 +49,7 @@ class OllamaService {
     this.maxLength = settings.LLM_MAX_LENGTH;
     this.contextWindow = settings.OLLAMA_CONTEXT_WINDOW;
 
-    logger.info(`Initializing Ollama service for model: ${this.modelName} at ${this.baseUrl} with ${this.contextWindow} context window`);
+    logger.info(`Initializing Ollama service for model: ${this.modelName} at ${this.baseUrl} with ${this.contextWindow} context window and ${this.maxLength} max tokens`);
     this.checkModelAvailability();
   }
 
@@ -141,6 +141,92 @@ class OllamaService {
       logger.error(`Error generating text with Ollama: ${error.message}`);
       throw error; // Re-throw the error to be handled by the caller
     }
+  }
+
+  public generateTextStream(prompt: string, systemPrompt?: string): ReadableStream<Uint8Array> {
+    // Create a TransformStream to process and forward chunks
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    
+    const params: OllamaGenerateParams = {
+      model: this.modelName,
+      prompt,
+      stream: true, // Enable streaming
+      options: {
+        temperature: this.temperature,
+        num_predict: this.maxLength,
+        num_ctx: this.contextWindow
+      }
+    };
+    
+    // Add system prompt if provided
+    if (systemPrompt) {
+      params.system = systemPrompt;
+    }
+
+    logger.debug(`Generating streaming text with Ollama model: ${this.modelName}`);
+    
+    // Start the fetch request to Ollama
+    fetch(`${this.baseUrl}/api/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params)
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+      }
+      
+      // Process the stream
+      const reader = response.body!.getReader();
+      
+      const textDecoder = new TextDecoder();
+      
+      function processStream() {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            writer.close();
+            return;
+          }
+          
+          try {
+            // Parse the chunk as JSON
+            const text = textDecoder.decode(value);
+            const lines = text.split('\n').filter(line => line.trim() !== '');
+            
+            for (const line of lines) {
+              try {
+                const chunk = JSON.parse(line) as OllamaGenerateResponse;
+                // Write only the response part to the output stream
+                if (chunk.response) {
+                  writer.write(new TextEncoder().encode(chunk.response));
+                }
+              } catch (e) {
+                logger.warn(`Error parsing JSON chunk: ${e}`);
+              }
+            }
+          } catch (e) {
+            logger.error(`Error processing stream chunk: ${e}`);
+          }
+          
+          // Continue reading
+          processStream();
+        }).catch(err => {
+          logger.error(`Error reading from stream: ${err}`);
+          writer.abort(err);
+        });
+      }
+      
+      processStream();
+    })
+    .catch(error => {
+      logger.error(`Error initiating stream: ${error}`);
+      writer.abort(error);
+    });
+    
+    return readable;
   }
 }
 

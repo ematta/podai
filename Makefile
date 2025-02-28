@@ -1,4 +1,4 @@
-.PHONY: setup install-backend install-frontend run-backend run-frontend run-all clean test test-backend test-e2e debug-backend debug-all setup-env build-backend build-frontend build-all
+.PHONY: setup install-backend install-frontend run-backend run-backend-low-tokens run-frontend run-all run-all-low-tokens clean test test-backend test-frontend test-frontend-unit test-frontend-e2e test-e2e test-all coverage-backend coverage-frontend coverage-all debug-backend debug-all setup-env build-backend build-frontend build-all
 
 setup: install-backend install-frontend
 
@@ -20,12 +20,16 @@ install-frontend:
 	cd frontend && npm install --legacy-peer-deps
 
 run-backend:
-	@echo "Starting Node.js backend server..."
-	cd node-backend && npm run dev
+	@echo "Starting Node.js backend server with high token limit (4096)..."
+	cd node-backend && LLM_MAX_LENGTH=4096 npm run dev
+
+run-backend-low-tokens:
+	@echo "Starting Node.js backend server with reduced token limit (2048)..."
+	cd node-backend && LLM_MAX_LENGTH=2048 npm run dev
 
 debug-backend:
-	@echo "Starting Node.js backend server in DEBUG mode..."
-	cd node-backend && NODE_ENV=development LOG_LEVEL=debug npm run dev
+	@echo "Starting Node.js backend server in DEBUG mode with high token limit (4096)..."
+	cd node-backend && NODE_ENV=development LOG_LEVEL=debug LLM_MAX_LENGTH=4096 npm run dev
 
 run-frontend:
 	@echo "Starting frontend development server..."
@@ -35,6 +39,10 @@ run-all:
 	@echo "Starting both servers..."
 	make -j 2 run-backend run-frontend
 
+run-all-low-tokens:
+	@echo "Starting both servers with reduced token limit (2048)..."
+	make -j 2 run-backend-low-tokens run-frontend
+
 debug-all:
 	@echo "Starting both servers in DEBUG mode..."
 	make -j 2 debug-backend run-frontend
@@ -43,9 +51,35 @@ test-backend:
 	@echo "Running backend tests..."
 	cd node-backend && npm test
 
+test-frontend:
+	@echo "Running frontend tests..."
+	cd frontend && npm run test
+
+test-frontend-unit:
+	@echo "Running frontend unit tests only..."
+	cd frontend && npx vitest run --exclude tests/e2e
+
+test-frontend-e2e:
+	@echo "Running frontend end-to-end tests only..."
+	cd frontend && npx playwright test
+
 test-e2e:
 	@echo "Running end-to-end tests..."
-	cd frontend && npm install @playwright/test @types/node && npx tsc -p tsconfig.test.json --noEmit && npx playwright install --with-deps chromium && npm run test:headed
+	cd frontend && npx playwright install --with-deps chromium && npm run test:headed
+
+test-all: test-backend test-frontend-unit
+	@echo "All tests completed"
+
+coverage-backend:
+	@echo "Running backend tests with coverage..."
+	cd node-backend && npm run test:coverage
+
+coverage-frontend:
+	@echo "Running frontend tests with coverage..."
+	cd frontend && npm run test:coverage
+
+coverage-all: coverage-backend coverage-frontend
+	@echo "All coverage tests completed"
 
 clean:
 	@echo "Cleaning up..."

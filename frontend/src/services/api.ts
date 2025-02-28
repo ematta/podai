@@ -120,6 +120,70 @@ export const getRagChatResponse = async (
   }
 }
 
+export const getRagChatStreamingResponse = async (
+  question: string,
+  fileId: string,
+  onChunk: (chunk: string) => void,
+  onComplete: () => void,
+  onError: (error: Error) => void
+): Promise<void> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/chat-rag-stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      mode: 'cors',
+      credentials: 'include',
+      body: JSON.stringify({
+        question,
+        fileId,
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get chat response: ${response.statusText}`);
+    }
+    
+    if (!response.body) {
+      throw new Error('Response body is null');
+    }
+    
+    // Get a reader from the response body stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    
+    // Process the stream chunks
+    const processStream = async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          // If the stream is done, call the onComplete callback
+          if (done) {
+            onComplete();
+            break;
+          }
+          
+          // Decode the chunk and send it to the callback
+          const chunk = decoder.decode(value);
+          onChunk(chunk);
+        }
+      } catch (error: any) {
+        console.error('Error processing stream:', error);
+        onError(new Error(`Failed to process stream: ${error.message}`));
+      }
+    };
+    
+    // Start processing the stream
+    processStream();
+    
+  } catch (error: any) {
+    console.error('Error getting streaming chat response:', error);
+    onError(new Error(error.message || 'Failed to get streaming chat response'));
+  }
+};
+
 export async function pollProgress(
   progressId: string, 
   onProgressUpdate?: (progress: number, message: string) => void
@@ -363,6 +427,7 @@ export default {
   convertPdfToMarkdown,
   uploadPdfWithEmbeddings,
   getRagChatResponse,
+  getRagChatStreamingResponse,
   pollProgress,
   getStoredPdfs,
   getScript,

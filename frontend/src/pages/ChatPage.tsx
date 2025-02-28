@@ -1,5 +1,5 @@
 import { useState, useRef, KeyboardEvent } from 'react';
-import { Box, Button, Container, Typography, Paper, Input } from '@mui/material';
+import { Box, Button, Container, Typography, Paper, Input, Switch, FormControlLabel } from '@mui/material';
 import PdfUploader from '../components/PdfUploader';
 import ChatWindow from '../components/ChatWindow';
 import ProgressBar from '../components/ProgressBar';
@@ -18,6 +18,7 @@ const ChatPage = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState<string>('');
   const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
+  const [useStreaming, setUseStreaming] = useState<boolean>(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,28 +96,76 @@ const ChatPage = () => {
       // Add a placeholder message for the assistant that will be updated
       setChatMessages(prev => [...prev, {
         role: 'assistant',
-        content: '...'
+        content: useStreaming ? '' : '...'
       }]);
       
-      const response = await api.getRagChatResponse(chatInput, fileId);
-      
-      // Replace the placeholder with the actual response
-      setChatMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = {
-          role: 'assistant',
-          content: response
-        };
-        return newMessages;
-      });
-      
+      if (useStreaming) {
+        // Use streaming API for word-by-word display
+        api.getRagChatStreamingResponse(
+          chatInput, 
+          fileId,
+          // Handle each new chunk
+          (chunk) => {
+            setChatMessages(prev => {
+              const newMessages = [...prev];
+              // Append the new chunk to the current content
+              newMessages[newMessages.length - 1] = {
+                role: 'assistant',
+                content: (newMessages[newMessages.length - 1].content || '') + chunk
+              };
+              return newMessages;
+            });
+          },
+          // Handle completion
+          () => {
+            setIsChatLoading(false);
+            // Focus the chat input after sending
+            if (inputRef.current) {
+              inputRef.current.focus();
+            }
+          },
+          // Handle errors
+          (err) => {
+            console.error('Error getting streaming chat response:', err);
+            setChatMessages(prev => {
+              const newMessages = [...prev];
+              // Replace the last message with error message
+              newMessages[newMessages.length - 1] = {
+                role: 'system',
+                content: `Error: ${err.message || 'Failed to get a streaming response'}`
+              };
+              return newMessages;
+            });
+            setIsChatLoading(false);
+          }
+        );
+      } else {
+        // Use the regular API
+        const response = await api.getRagChatResponse(chatInput, fileId);
+        
+        // Replace the placeholder with the actual response
+        setChatMessages(prev => {
+          const newMessages = [...prev];
+          newMessages[newMessages.length - 1] = {
+            role: 'assistant',
+            content: response
+          };
+          return newMessages;
+        });
+        
+        setIsChatLoading(false);
+        
+        // Focus the chat input after sending
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }
     } catch (err: any) {
       console.error('Error getting chat response:', err);
       setChatMessages(prev => [...prev, {
         role: 'system',
         content: `Error: ${err.message || 'Failed to get a response'}`
       }]);
-    } finally {
       setIsChatLoading(false);
       
       // Focus the chat input after sending
@@ -196,9 +245,22 @@ const ChatPage = () => {
       
       {(pdfId || fileId) && (
         <Paper elevation={3} sx={{ p: 3 }} data-testid="chat-section">
-          <Typography variant="h6" gutterBottom data-testid="chat-title">
-            Chat with your PDF
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" gutterBottom data-testid="chat-title" sx={{ mb: 0 }}>
+              Chat with your PDF
+            </Typography>
+            
+            <FormControlLabel
+              control={
+                <Switch 
+                  checked={useStreaming}
+                  onChange={(e) => setUseStreaming(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label="Stream responses"
+            />
+          </Box>
           
           <ChatWindow 
             messages={chatMessages} 

@@ -359,6 +359,74 @@ app.post('/api/chat-rag', async (req, res) => {
   }
 });
 
+// Stream-based RAG chat with PDF
+app.post('/api/chat-rag-stream', async (req, res) => {
+  try {
+    const { question, fileId } = req.body;
+    
+    if (!question || !fileId) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+    
+    if (!settings.USE_LOCAL_MODEL) {
+      return res.status(400).json({ 
+        error: 'Streaming is only available with local Ollama models', 
+        message: 'Enable USE_LOCAL_MODEL in settings to use streaming'
+      });
+    }
+    
+    // Set appropriate headers for streaming
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    try {
+      // Get the stream from the LLM service
+      const stream = await llmService.chatWithPdfStream(question, fileId);
+      
+      // Stream the response to the client
+      const reader = stream.getReader();
+      
+      // Process the stream chunks
+      const processStream = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            // If the stream is done, end the response
+            if (done) {
+              res.end();
+              break;
+            }
+            
+            // Send the chunk to the client
+            const chunk = new TextDecoder().decode(value);
+            res.write(chunk);
+          }
+        } catch (error: any) {
+          logger.error(`Error processing stream: ${error.message}`);
+          res.write(`\nError: ${error.message}`);
+          res.end();
+        }
+      };
+      
+      // Start streaming
+      processStream();
+      
+    } catch (error: any) {
+      logger.error(`Error starting stream: ${error.message}`);
+      res.write(`Error: ${error.message}`);
+      res.end();
+    }
+  } catch (error: any) {
+    logger.error('Error setting up streaming response:', error);
+    res.status(500).json({
+      error: 'Failed to generate streaming response',
+      message: error.message || 'Unknown error occurred'
+    });
+  }
+});
+
 // Serve the frontend if no API routes match
 app.get('*', (req: express.Request, res: express.Response) => {
   const indexPath = path.join(__dirname, '../../frontend/dist/index.html');

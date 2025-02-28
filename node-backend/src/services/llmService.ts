@@ -11,7 +11,7 @@ import { ProgressTracker } from '../utils/progressTracker.js';
 const logger = createLogger('llm-service');
 
 // Token limit constants
-const HF_MAX_TOTAL_TOKENS = 4096;
+const HF_MAX_TOTAL_TOKENS = 8192; // Increase this to allow for larger context windows
 // Use a more conservative estimate - some models count tokens differently
 const APPROX_CHARS_PER_TOKEN = 3.5; 
 
@@ -83,7 +83,7 @@ class LLMService {
     const promptTokens = Math.ceil(prompt.length / APPROX_CHARS_PER_TOKEN);
     // Be more conservative with the max tokens allocation
     const maxResponseTokens = Math.min(
-      Math.floor((HF_MAX_TOTAL_TOKENS - promptTokens) * 0.8), // Use only 80% of remaining tokens
+      Math.floor((HF_MAX_TOTAL_TOKENS - promptTokens) * 0.9), // Use 90% of remaining tokens instead of 80%
       this.maxLength
     );
     
@@ -426,6 +426,70 @@ class LLMService {
           return `I encountered an error while processing your question about the document. Please try again or check your configuration. Error details: ${error.message}`;
         }
       }
+    }
+  }
+
+  // Stream-based RAG chat with PDF 
+  public async chatWithPdfStream(question: string, fileId: string): ReadableStream<Uint8Array> {
+    if (!question || !fileId) {
+      throw new Error('Please provide both a question and a valid PDF ID.');
+    }
+    
+    // Check if we are using local model - streaming only works with Ollama
+    if (!this.useLocalModel) {
+      throw new Error('Streaming responses are only available when using a local model with Ollama.');
+    }
+    
+    // Check if we have the PDF stored
+    if (!this.pdfStore[fileId]) {
+      throw new Error('PDF not found. Please upload the PDF first.');
+    }
+    
+    // Check if we have embeddings for this PDF
+    if (!vectorStoreService.hasEmbeddings(fileId)) {
+      logger.info(`No embeddings found for file ${fileId}, generating them now`);
+      try {
+        await vectorStoreService.addDocument(fileId, this.pdfStore[fileId].content);
+      } catch (error: any) {
+        logger.error(`Error generating embeddings: ${error.message}`);
+        throw new Error(`Error preparing document for chat: ${error.message}`);
+      }
+    }
+    
+    try {
+      // Perform similarity search to find relevant chunks
+      const relevantDocs = await vectorStoreService.similaritySearch(fileId, question, 5);
+      
+      if (relevantDocs.length === 0) {
+        throw new Error("I couldn't find any relevant information in the document to answer your question.");
+      }
+      
+      // Combine the relevant chunks into context
+      const context = relevantDocs.map(doc => doc.pageContent).join('\n\n');
+      
+      // Log information
+      logger.info(`Retrieved ${relevantDocs.length} relevant chunks with total length ${context.length} chars`);
+      
+      const systemPrompt = `You are an AI assistant that answers questions based on the specific sections of a document provided below.
+      Analyze the document content and provide accurate answers to the question.
+      If the answer is not in the provided sections, say so clearly.
+      Always be factual and refer only to the provided content.`;
+      
+      const userPrompt = `Document sections:
+      ${context}
+      
+      Question: ${question}`;
+      
+      // Get a streaming response from Ollama
+      return ollamaService.generateTextStream(userPrompt, systemPrompt);
+      
+    } catch (error: any) {
+      // Create a TransformStream to return error as a stream
+      const { readable, writable } = new TransformStream();
+      const writer = writable.getWriter();
+      writer.write(new TextEncoder().encode(`Error: ${error.message}`));
+      writer.close();
+      return readable;
     }
   }
 
