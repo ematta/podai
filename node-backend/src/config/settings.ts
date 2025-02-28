@@ -27,6 +27,7 @@ class Settings {
   public readonly USE_LOCAL_MODEL: boolean = process.env.USE_LOCAL_MODEL === 'true';
   public readonly OLLAMA_BASE_URL: string = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
   public readonly OLLAMA_MODEL: string = process.env.OLLAMA_MODEL || 'granite';
+  public readonly OLLAMA_CONTEXT_WINDOW: number = parseInt(process.env.OLLAMA_CONTEXT_WINDOW || '16384', 10); // 16k context window
 
   constructor() {
     // Create uploads directory if it doesn't exist

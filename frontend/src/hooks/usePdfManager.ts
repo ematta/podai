@@ -1,12 +1,16 @@
 import { useState } from 'react'
-import axios from 'axios'
-import { ScriptResponse, PDFList } from '../types'
+import { PDFList } from '../types'
+
+// Define the ScriptResponse type locally since it needs specific fields
+interface ScriptResponse {
+  id: string;
+  script: string;
+}
 
 export const usePdfManager = () => {
   const [file, setFile] = useState<File | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [script, setScript] = useState('')
-  const [markdown, setMarkdown] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [currentPdfId, setCurrentPdfId] = useState<string>('')
@@ -27,8 +31,12 @@ export const usePdfManager = () => {
 
   const loadStoredPdfs = async () => {
     try {
-      const response = await axios.get<PDFList>('http://localhost:8081/pdfs')
-      setStoredPdfs(response.data.pdf_ids)
+      const response = await fetch('http://localhost:8081/pdfs')
+      if (!response.ok) {
+        throw new Error('Failed to load PDFs')
+      }
+      const data = await response.json() as PDFList
+      setStoredPdfs(data.pdf_ids)
     } catch (error) {
       console.error('Failed to load PDFs:', error)
       setError('Failed to load stored PDFs')
@@ -44,28 +52,41 @@ export const usePdfManager = () => {
     formData.append('file', file)
 
     try {
-      const response = await axios.post<ScriptResponse>('http://localhost:8081/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        },
-        onUploadProgress: (progressEvent) => {
-          const progress = progressEvent.loaded / (progressEvent.total ?? 0) * 100
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', 'http://localhost:8081/upload', true)
+      
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = (event.loaded / event.total) * 100
           setUploadProgress(Math.round(progress))
         }
-      })
-
-      setScript(response.data.script)
-      setMarkdown(response.data.markdown)
-      setCurrentPdfId(response.data.pdf_id)
-      loadStoredPdfs() // Refresh the list of PDFs
-      return response.data
-    } catch (error) {
-      console.error('Upload failed:', error)
-      setError('Failed to process PDF. Please try again.')
-      throw error
-    } finally {
+      }
+      
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          const response = JSON.parse(xhr.responseText) as ScriptResponse
+          setScript(response.script)
+          setCurrentPdfId(response.id)
+          loadStoredPdfs() // Refresh the list of PDFs
+        } else {
+          setError('Upload failed')
+        }
+        setIsLoading(false)
+      }
+      
+      xhr.onerror = () => {
+        setError('Upload failed due to network error')
+        setIsLoading(false)
+      }
+      
+      xhr.send(formData)
+      
+      return null // This function no longer returns the response data
+    } catch (error: any) {
+      console.error('Error uploading PDF:', error)
+      setError(error.message || 'Failed to upload PDF')
       setIsLoading(false)
-      setUploadProgress(0)
+      return null
     }
   }
 
@@ -73,7 +94,6 @@ export const usePdfManager = () => {
     file,
     uploadProgress,
     script,
-    markdown,
     error,
     isLoading,
     currentPdfId,

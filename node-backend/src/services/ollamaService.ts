@@ -17,6 +17,7 @@ interface OllamaGenerateParams {
     top_p?: number;
     num_predict?: number;
     stop?: string[];
+    num_ctx?: number;
   };
 }
 
@@ -39,14 +40,16 @@ class OllamaService {
   private modelName: string;
   private temperature: number;
   private maxLength: number;
+  private contextWindow: number;
 
   constructor() {
     this.baseUrl = settings.OLLAMA_BASE_URL;
     this.modelName = settings.OLLAMA_MODEL;
     this.temperature = settings.LLM_TEMPERATURE;
     this.maxLength = settings.LLM_MAX_LENGTH;
+    this.contextWindow = settings.OLLAMA_CONTEXT_WINDOW;
 
-    logger.info(`Initializing Ollama service for model: ${this.modelName} at ${this.baseUrl}`);
+    logger.info(`Initializing Ollama service for model: ${this.modelName} at ${this.baseUrl} with ${this.contextWindow} context window`);
     this.checkModelAvailability();
   }
 
@@ -86,31 +89,58 @@ class OllamaService {
         params.system = systemPrompt;
       }
 
-      logger.debug(`Generating text with Ollama model: ${this.modelName}`);
-      const response = await axios.post<OllamaGenerateResponse>(
-        `${this.baseUrl}/api/generate`, 
-        params
-      );
+      // Configure context window for long content
+      params.options = {
+        ...params.options,
+        num_ctx: this.contextWindow
+      };
 
-      return response.data.response;
-    } catch (error) {
-      logger.error(`Error generating text with Ollama: ${error}`);
-      return this.fallbackGeneration(prompt);
-    }
-  }
-
-  private fallbackGeneration(prompt: string): string {
-    // Extract user's question or content from chat format
-    if (prompt.includes('[INST]') && prompt.includes('[/INST]')) {
-      const content = prompt.split('[INST]')[1].split('[/INST]')[0].trim();
-      if (content.includes('Question:')) {
-        const question = content.split('Question:')[1].trim();
-        return `${prompt}\n\nBased on the document, I can tell you that the answer relates to ${question}, but I don't have more specific details.`;
+      logger.debug(`Generating text with Ollama model: ${this.modelName}, context window: ${this.contextWindow}`);
+      
+      try {
+        const response = await axios.post<OllamaGenerateResponse>(
+          `${this.baseUrl}/api/generate`, 
+          params
+        );
+  
+        return response.data.response;
+      } catch (e: any) {
+        // Check for context window related errors
+        if (e.response?.data?.error && 
+            (e.response.data.error.includes('context window') || 
+             e.response.data.error.includes('tokens exceed') ||
+             e.response.data.error.includes('out of memory'))) {
+          
+          logger.warn(`Context window error, reducing window size and retrying: ${e.response.data.error}`);
+          
+          // Try again with smaller context window
+          const reducedCtx = Math.floor(this.contextWindow * 0.75); // Reduce by 25%
+          params.options.num_ctx = reducedCtx;
+          
+          logger.info(`Retrying with reduced context window: ${reducedCtx}`);
+          
+          try {
+            const retryResponse = await axios.post<OllamaGenerateResponse>(
+              `${this.baseUrl}/api/generate`, 
+              params
+            );
+            
+            return retryResponse.data.response;
+          } catch (retryError: any) {
+            // If retry also fails, throw a more detailed error
+            const errorMessage = retryError.response?.data?.error || retryError.message;
+            throw new Error(`Ollama generation failed even with reduced context: ${errorMessage}`);
+          }
+        }
+        
+        // For other errors, format the error message to be more informative
+        const errorMessage = e.response?.data?.error || e.message;
+        throw new Error(`Ollama generation failed: ${errorMessage}`);
       }
+    } catch (error: any) {
+      logger.error(`Error generating text with Ollama: ${error.message}`);
+      throw error; // Re-throw the error to be handled by the caller
     }
-
-    // For script generation
-    return `${prompt}\n\n# Podcast Script\n\n**HOST:** Welcome to our podcast!\n\n**HOST:** Today we're discussing some fascinating content.\n\n**CO-HOST:** That's really interesting!\n\n**HOST:** Thanks for listening!`;
   }
 }
 

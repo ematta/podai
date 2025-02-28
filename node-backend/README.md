@@ -57,6 +57,7 @@ USE_LOCAL_MODEL=true
 # Configure Ollama settings
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=granite
+OLLAMA_CONTEXT_WINDOW=16384  # 16k context window
 ```
 
 4. Start the Ollama server (if not already running):
@@ -72,8 +73,19 @@ Benefits of using a local model:
 - Complete privacy - all data stays on your machine
 - No cost or rate limits
 - Works offline
+- **Much larger context window** (16k vs ~4k tokens for Hugging Face API)
 
 Note: Running models locally requires sufficient RAM and computational resources. The minimum recommended is 8GB RAM, with 16GB+ preferred for larger models.
+
+### Understanding Context Windows and Token Limits
+
+- **Hugging Face API** has a combined limit of approximately 4096 tokens for both input and output combined. This means that large documents will be heavily truncated.
+
+- **Local models via Ollama** can handle much larger contexts. The default setting of 16k context window allows for processing approximately 50,000 characters of text, which is enough for most PDFs and documents.
+
+- You can adjust the `OLLAMA_CONTEXT_WINDOW` setting based on your hardware capabilities and model used. Some models support even larger context windows (32k or 64k), but require more RAM.
+
+- If you experience slow performance or out-of-memory errors when using a local model, try reducing the context window size.
 
 ## Development
 

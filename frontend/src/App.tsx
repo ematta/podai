@@ -1,9 +1,8 @@
-import React from 'react'
-import { PodcastGenerator } from './pages/PodcastGenerator'
+import ChatPage from './pages/ChatPage'
 import './styles/App.css'
 
 function App() {
-  return <PodcastGenerator />
+  return <ChatPage />
 }
 
 export default App

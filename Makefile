@@ -1,4 +1,4 @@
-.PHONY: setup install-backend install-frontend run-backend run-frontend run-all clean test test-backend test-e2e debug-backend debug-all setup-env
+.PHONY: setup install-backend install-frontend run-backend run-frontend run-all clean test test-backend test-e2e debug-backend debug-all setup-env build-backend build-frontend build-all
 
 setup: install-backend install-frontend
 
@@ -45,7 +45,7 @@ test-backend:
 
 test-e2e:
 	@echo "Running end-to-end tests..."
-	cd node-backend && npm test -- "__tests__/e2e/**/*.test.ts"
+	cd frontend && npm install @playwright/test && npx playwright install --with-deps chromium && npm run test:headed
 
 clean:
 	@echo "Cleaning up..."
@@ -53,3 +53,14 @@ clean:
 	rm -rf frontend/dist
 	rm -rf node-backend/node_modules
 	rm -rf frontend/node_modules
+
+build-backend:
+	@echo "Building Node.js backend..."
+	cd node-backend && npm run build
+
+build-frontend:
+	@echo "Building frontend production version..."
+	cd frontend && npm run build
+
+build-all: build-backend build-frontend
+	@echo "Both backend and frontend built successfully!"

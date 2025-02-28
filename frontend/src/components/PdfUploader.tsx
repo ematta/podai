@@ -1,18 +1,16 @@
 import React, { useRef } from 'react'
 
 type Props = {
-  file: File | null
+  selectedFile: File | null
   isLoading: boolean
-  error: string
-  onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void
+  onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void
   onUpload: () => void
 }
 
-export const PdfUploader: React.FC<Props> = ({
-  file,
+const PdfUploader: React.FC<Props> = ({
+  selectedFile,
   isLoading,
-  error,
-  onFileUpload,
+  onFileChange,
   onUpload
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -22,19 +20,22 @@ export const PdfUploader: React.FC<Props> = ({
       fileInputRef.current.value = '';
     }
     // Reset file state by triggering a change event with no files
-    onFileUpload({ target: { files: null } } as any);
+    onFileChange({ target: { files: null } } as any);
   };
 
   return (
-    <div className="upload-section">
+    <div className="upload-section" data-testid="pdf-uploader">
+      <h2>Upload PDF for Podcast Script Generation</h2>
+      
       <input
         type="file"
         id="file-upload"
         accept=".pdf"
-        onChange={onFileUpload}
+        onChange={onFileChange}
         style={{ display: 'none' }}
         disabled={isLoading}
         ref={fileInputRef}
+        data-testid="file-input"
       />
       
       <div className="upload-controls">
@@ -42,59 +43,124 @@ export const PdfUploader: React.FC<Props> = ({
           onClick={() => fileInputRef.current?.click()} 
           className="upload-button"
           disabled={isLoading}
+          data-testid="select-file-button"
         >
-          {isLoading ? 'Processing...' : 'Upload'}
+          Select PDF
         </button>
         
         <button 
           onClick={handleClear} 
           className="clear-button"
-          disabled={isLoading}
+          disabled={isLoading || !selectedFile}
+          data-testid="clear-file-button"
         >
           Clear
         </button>
       </div>
       
-      <div className="pdf-name-container">
-        <input 
-          type="text" 
-          className="pdf-name-input"
-          value={file ? file.name : 'PDF Name'}
-          readOnly
-        />
-        <button className="edit-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-          </svg>
-        </button>
-      </div>
-      
-      <div className="pdf-preview-container">
-        {/* PDF Preview area */}
-        {isLoading && <div className="loading-indicator">Processing PDF...</div>}
-      </div>
-      
-      {error && (
-        <div className="error-message">
-          <strong>Error:</strong> {error}
-          <button 
-            className="dismiss-error"
-            onClick={() => window.location.reload()}
-          >
-            Reload
-          </button>
+      {selectedFile && (
+        <div className="file-info" data-testid="selected-file-info">
+          <span className="file-label" data-testid="selected-file-name">Selected PDF: </span>
+          <span className="file-name" data-testid="selected-file-name">{selectedFile.name}</span>
+          <span className="file-size" data-testid="selected-file-size">({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
         </div>
       )}
       
-      {file && !error && !isLoading && (
+      {selectedFile && !isLoading && (
         <button 
           onClick={onUpload} 
-          className="process-button"
-          disabled={isLoading}
+          className="convert-button"
+          data-testid="upload-button"
         >
-          Convert PDF
+          Convert to Podcast Script
         </button>
       )}
+      
+      {isLoading && <div className="loading-indicator" data-testid="loading-indicator">Processing PDF...</div>}
+      
+      {/* <style jsx>{`
+        .upload-section {
+          background-color: #f9f9f9;
+          border-radius: 8px;
+          padding: 20px;
+          margin-bottom: 20px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h2 {
+          margin-top: 0;
+          margin-bottom: 15px;
+          font-size: 18px;
+          color: #333;
+        }
+        
+        .upload-controls {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 15px;
+        }
+        
+        .upload-button {
+          background-color: #4a8df8;
+          color: white;
+          border: none;
+          padding: 10px 15px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-weight: bold;
+        }
+        
+        .clear-button {
+          background-color: #f0f0f0;
+          color: #666;
+          border: 1px solid #ddd;
+          padding: 10px 15px;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        
+        .file-info {
+          background-color: #fff;
+          padding: 10px 15px;
+          border-radius: 4px;
+          border: 1px solid #e0e0e0;
+          margin-bottom: 15px;
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        
+        .file-label {
+          font-weight: bold;
+          margin-right: 5px;
+        }
+        
+        .file-name {
+          color: #2196f3;
+          margin-right: 5px;
+          word-break: break-all;
+        }
+        
+        .convert-button {
+          background-color: #4caf50;
+          color: white;
+          border: none;
+          padding: 12px 20px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-weight: bold;
+          width: 100%;
+          font-size: 16px;
+          margin-top: 10px;
+        }
+        
+        button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+      `}</style> */}
     </div>
   )
 }
+
+export default PdfUploader

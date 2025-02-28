@@ -2,17 +2,36 @@
 import './config/env.js';
 
 import express from 'express';
-import cors from 'cors';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
+import cors from 'cors';
+import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import pdfParse from 'pdf-parse';
+import * as dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { createLogger } from './config/logger.js';
 import { settings } from './config/settings.js';
-import { logger } from './config/logger.js';
 import { llmService } from './services/llmService.js';
 import { pdfService } from './services/pdfService.js';
 import { upload, handleUploadError } from './utils/fileMiddleware.js';
-import { ChatRequest, ChatResponse, UploadResponse, ErrorResponse } from './types/index.js';
+import { ProgressTracker } from './utils/progressTracker.js';
+import testRoutes from './routes/testRoutes.js';
+
+// Create logger
+const logger = createLogger('server');
+
+// Define response types
+type ErrorResponse = { error: string };
+type UploadResponse = { fileId: string; markdown: string; script: string };
+type ChatResponse = { response: string };
+type ProgressResponse = { id: string; status: string; progress: number; result?: any };
+
+// Define chat history type
+interface ChatHistoryItem {
+  question: string;
+  answer: string;
+}
 
 // Get __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -22,12 +41,22 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Global chat history (in memory)
-const chatHistory: Record<string, Array<{ question: string; answer: string }>> = {};
+const chatHistory: Record<string, ChatHistoryItem[]> = {};
 
 // Configure middleware
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:8081', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:8080'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'Content-Type'],
+  credentials: true,
+  maxAge: 86400 // 24 hours
+}));
 app.use(express.static(path.join(__dirname, '../../frontend/dist'))); // For serving frontend files
+
+// Register routes
+app.use('/api/test', testRoutes);
 
 // Function to check if file exists
 function fileExists(filePath: string): boolean {
@@ -43,6 +72,33 @@ app.get('/health', (req: express.Request, res: express.Response) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// Track progress of long-running operations
+const progressTracker = new Map<string, { id: string; status: string; progress: number; result?: any }>();
+
+// Progress polling endpoint
+app.get('/progress/:id', (req: express.Request, res: express.Response) => {
+  const id = req.params.id;
+  const progressData = progressTracker.get(id);
+  
+  if (!progressData) {
+    return res.status(404).json({ error: 'No progress data found for this ID' });
+  }
+  
+  // If operation is complete, remove from tracker after sending
+  if (progressData.status === 'complete' || progressData.status === 'error') {
+    const result = { ...progressData };
+    
+    // Only delete after 1 minute to allow for retry fetches from client
+    setTimeout(() => {
+      progressTracker.delete(id);
+    }, 60000);
+    
+    return res.status(200).json(result);
+  }
+  
+  return res.status(200).json(progressData);
+});
+
 // Upload endpoint
 app.post('/upload', upload.single('file'), async (req: express.Request, res: express.Response) => {
   try {
@@ -50,27 +106,81 @@ app.post('/upload', upload.single('file'), async (req: express.Request, res: exp
       return res.status(400).json({ error: 'No file uploaded' } as ErrorResponse);
     }
 
-    // Save file
-    const fileId = await pdfService.saveFile(req.file);
-    const filePath = pdfService.getFilePath(fileId);
+    // Create a progress tracker ID for this operation
+    const operationId = uuidv4();
+    progressTracker.set(operationId, {
+      id: operationId,
+      status: 'processing',
+      progress: 0
+    });
 
-    // Convert PDF to markdown
-    const markdown = await pdfService.pdfToMarkdown(filePath);
+    // Send immediate response with the operation ID
+    res.status(202).json({ 
+      operationId,
+      message: 'Processing started' 
+    });
 
-    // Generate script
-    const script = await llmService.generateScript(markdown);
+    // Process the file asynchronously
+    (async () => {
+      try {
+        // Save file
+        progressTracker.set(operationId, {
+          id: operationId,
+          status: 'processing',
+          progress: 10,
+        });
+        
+        // TypeScript non-null assertion to tell TypeScript that req.file is not null
+        // We've already checked for null above
+        const fileId = await pdfService.saveFile(req.file!);
+        const filePath = pdfService.getFilePath(fileId);
 
-    // Initialize chat history for this file
-    chatHistory[fileId] = [];
+        // Convert PDF to markdown
+        progressTracker.set(operationId, {
+          id: operationId,
+          status: 'processing',
+          progress: 30,
+        });
+        
+        const markdown = await pdfService.pdfToMarkdown(filePath);
 
-    const response: UploadResponse = {
-      fileId,
-      markdown,
-      script
-    };
+        // Generate script
+        progressTracker.set(operationId, {
+          id: operationId,
+          status: 'processing',
+          progress: 50,
+        });
+        
+        const script = await llmService.generateScript(markdown);
 
-    logger.info(`Successfully processed file with ID: ${fileId}`);
-    return res.status(200).json(response);
+        // Initialize chat history for this file
+        chatHistory[fileId] = [];
+
+        const result: UploadResponse = {
+          fileId,
+          markdown,
+          script
+        };
+
+        // Update progress to complete
+        progressTracker.set(operationId, {
+          id: operationId,
+          status: 'complete',
+          progress: 100,
+          result
+        });
+
+        logger.info(`Successfully processed file with ID: ${fileId}`);
+      } catch (error) {
+        logger.error(`Error in async processing: ${error}`);
+        progressTracker.set(operationId, {
+          id: operationId,
+          status: 'error',
+          progress: 0,
+          result: { error: 'An error occurred while processing your file' }
+        });
+      }
+    })();
   } catch (error) {
     logger.error(`Error processing upload: ${error}`);
     return res.status(500).json({ 
@@ -83,42 +193,87 @@ app.post('/upload', upload.single('file'), async (req: express.Request, res: exp
 app.post('/chat/:fileId', async (req: express.Request, res: express.Response) => {
   try {
     const { fileId } = req.params;
-    const { question } = req.body as ChatRequest;
+    const { question } = req.body;
 
     if (!question) {
-      return res.status(400).json({ 
-        error: 'No question provided' 
-      } as ErrorResponse);
+      return res.status(400).json({ error: 'No question provided' } as ErrorResponse);
     }
 
-    // Get file path
-    let filePath: string;
-    try {
-      filePath = pdfService.getFilePath(fileId);
-    } catch (error) {
-      return res.status(404).json({ 
-        error: 'File not found' 
-      } as ErrorResponse);
+    // Check if file exists
+    const filePath = pdfService.getFilePath(fileId);
+    if (!fileExists(filePath)) {
+      return res.status(404).json({ error: 'File not found' } as ErrorResponse);
     }
 
-    // Extract text from PDF
-    const pdfText = await pdfService.extractTextFromPdf(filePath);
+    // Create a progress tracker ID for this operation
+    const operationId = uuidv4();
+    progressTracker.set(operationId, {
+      id: operationId,
+      status: 'processing',
+      progress: 0
+    });
 
-    // Generate answer
-    const answer = await llmService.chatWithPdf(question, pdfText);
+    // Send immediate response with the operation ID
+    res.status(202).json({ 
+      operationId,
+      message: 'Processing started' 
+    });
 
-    // Save to chat history
-    if (!chatHistory[fileId]) {
-      chatHistory[fileId] = [];
-    }
-    chatHistory[fileId].push({ question, answer });
+    // Process the chat asynchronously
+    (async () => {
+      try {
+        // Update to parsing state
+        progressTracker.set(operationId, {
+          id: operationId,
+          status: 'processing',
+          progress: 25,
+        });
+        
+        // Get PDF text
+        const pdfText = await pdfService.extractTextFromPdf(filePath);
+        
+        // Update to chat generation state
+        progressTracker.set(operationId, {
+          id: operationId,
+          status: 'processing',
+          progress: 50,
+        });
+        
+        // Generate response
+        const answer = await llmService.chatWithPdf(question, pdfText);
 
-    const response: ChatResponse = { answer };
-    return res.status(200).json(response);
+        // Store in chat history
+        if (!chatHistory[fileId]) {
+          chatHistory[fileId] = [];
+        }
+        
+        chatHistory[fileId].push({ question, answer });
+
+        const result: ChatResponse = { response: answer };
+
+        // Update progress to complete
+        progressTracker.set(operationId, {
+          id: operationId,
+          status: 'complete',
+          progress: 100,
+          result
+        });
+
+        logger.info(`Successfully processed chat for file ID: ${fileId}`);
+      } catch (error) {
+        logger.error(`Error in async chat processing: ${error}`);
+        progressTracker.set(operationId, {
+          id: operationId,
+          status: 'error',
+          progress: 0,
+          result: { error: 'An error occurred while processing your chat' }
+        });
+      }
+    })();
   } catch (error) {
-    logger.error(`Error in chat: ${error}`);
+    logger.error(`Error in chat endpoint: ${error}`);
     return res.status(500).json({ 
-      error: 'An error occurred while processing your question' 
+      error: 'An error occurred while processing your chat' 
     } as ErrorResponse);
   }
 });
@@ -128,12 +283,80 @@ app.get('/chat/:fileId/history', (req: express.Request, res: express.Response) =
   const { fileId } = req.params;
   
   if (!chatHistory[fileId]) {
-    return res.status(404).json({ 
-      error: 'No chat history found for this file' 
-    } as ErrorResponse);
+    return res.status(404).json({ error: 'No chat history found for this file' } as ErrorResponse);
   }
   
   return res.status(200).json(chatHistory[fileId]);
+});
+
+// RAG-based chat endpoints and progress tracking endpoints
+app.post('/api/generate-script', async (req, res) => {
+  // TO DO: implement generate script endpoint
+});
+
+// Get progress for a job
+app.get('/api/progress/:id', (req, res) => {
+  const { id } = req.params;
+  const progress = ProgressTracker.getProgress(id);
+  
+  if (!progress) {
+    return res.status(404).json({ error: 'Progress not found' });
+  }
+  
+  res.json(progress);
+});
+
+// Store PDF and create embeddings
+app.post('/api/store-pdf', upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No PDF file uploaded' });
+    }
+    
+    // Parse PDF
+    const dataBuffer = req.file.buffer;
+    const pdfData = await pdfParse(dataBuffer);
+    
+    // Store PDF with embeddings
+    const fileId = await llmService.storePdf(pdfData.text, req.file.originalname);
+    
+    res.status(200).json({ 
+      success: true, 
+      fileId,
+      message: 'PDF stored and indexed successfully',
+      progressId: `pdf-${fileId}`
+    });
+  } catch (error: any) {
+    console.error('Error processing PDF:', error);
+    res.status(500).json({
+      error: 'Failed to process PDF',
+      message: error.message || 'Unknown error occurred'
+    });
+  }
+});
+
+// RAG-based chat with PDF
+app.post('/api/chat-rag', async (req, res) => {
+  try {
+    const { question, fileId } = req.body;
+    
+    if (!question || !fileId) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+    
+    const answer = await llmService.chatWithPdf(question, fileId);
+    
+    res.status(200).json({ 
+      success: true, 
+      answer 
+    });
+  } catch (error: any) {
+    console.error('Error generating chat response:', error);
+    res.status(500).json({
+      error: 'Failed to generate response',
+      message: error.message || 'Unknown error occurred'
+    });
+  }
 });
 
 // Serve the frontend if no API routes match
