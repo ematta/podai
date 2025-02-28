@@ -1,26 +1,25 @@
+from flask import (
+    Flask, request, jsonify, send_file, render_template, 
+    send_from_directory
+)
+from flask_cors import CORS
 import os
 import uuid
 import logging
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from src.services.pdf_service import pdf_service
+from src.services.llm_service import llm_service
 from src.config.settings import settings
-from src.services.pdf_service import process_text, clean_text, PdfReader
+
+app = Flask(__name__)
+CORS(app)
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=getattr(logging, settings.LOG_LEVEL),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-app = Flask(__name__, static_folder='static')
-# Set up CORS to allow requests from the frontend
-CORS(app, 
-     origins=["http://localhost:8080", "http://127.0.0.1:8080"], 
-     supports_credentials=True,
-     allow_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 # Configure app settings
 app.config['UPLOAD_FOLDER'] = settings.UPLOAD_FOLDER
@@ -37,7 +36,7 @@ def pdf_to_markdown(file_path):
     """Convert PDF to markdown format"""
     try:
         logger.debug(f"Opening PDF: {file_path}")
-        reader = PdfReader(file_path)
+        reader = pdf_service.PdfReader(file_path)
         logger.debug(f"PDF opened successfully with {len(reader.pages)} pages")
         
         markdown_content = ""
@@ -46,7 +45,7 @@ def pdf_to_markdown(file_path):
             logger.debug(f"Processing page {page_num+1}/{len(reader.pages)}")
             text = page.extract_text()
             if text:
-                elements = process_text(text)
+                elements = pdf_service.process_text(text)
                 for element in elements:
                     markdown_content += element.to_markdown() + "\n\n"
                 
@@ -60,25 +59,9 @@ def pdf_to_markdown(file_path):
 
 def generate_script(markdown_content):
     """
-    Generate a podcast script from markdown content
-    This is a simple implementation - in a real app, you might use an AI model
+    Generate a podcast script from markdown content using Llama 3.2 3B
     """
-    # For now, we'll just add some podcast script formatting to the markdown
-    if not markdown_content:
-        return ""
-    
-    paragraphs = markdown_content.split("\n\n")
-    script = "# Podcast Script\n\n"
-    script += "**HOST:** Welcome to our podcast! Today we're discussing an interesting document.\n\n"
-    
-    for i, para in enumerate(paragraphs[:5]):  # Limit to first 5 paragraphs for simplicity
-        if para.strip():
-            script += f"**HOST:** {para.strip()}\n\n"
-            if i < len(paragraphs) - 1:
-                script += "**CO-HOST:** That's a great point. Let me add some thoughts...\n\n"
-    
-    script += "**HOST:** Thanks for listening to our podcast! Don't forget to subscribe.\n"
-    return script
+    return llm_service.generate_script(markdown_content)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -202,19 +185,57 @@ def chat_with_pdf(pdf_id):
     
     chat_history[pdf_id].append({'role': 'user', 'content': question})
     
-    # Generate a simple response for now
-    # In a real application, you would use an AI model to generate responses
-    answer = f"I've analyzed the PDF and can tell you that it discusses various topics. You asked: {question}"
-    sources = [f"Page {i+1}" for i in range(min(3, len(question) % 5 + 1))]
-    
-    # Store answer in chat history
-    chat_history[pdf_id].append({'role': 'assistant', 'content': answer, 'sources': sources})
-    
-    return jsonify({'answer': answer, 'sources': sources})
+    try:
+        # Extract text from PDF
+        reader = pdf_service.PdfReader(file_path)
+        pdf_text = ""
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                pdf_text += text + "\n\n"
+        
+        # Use LLM to generate response
+        answer = llm_service.chat_with_pdf(question, pdf_text)
+        sources = [f"Page {i+1}" for i in range(min(3, len(pdf_text) // 1000))]
+        
+        # Store answer in chat history
+        chat_history[pdf_id].append({'role': 'assistant', 'content': answer, 'sources': sources})
+        
+        return jsonify({'response': answer, 'sources': sources})
+    except Exception as e:
+        logger.error(f"Error in chat: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
 
+@app.route('/debug/llm')
+def debug_llm():
+    """Debug endpoint to check LLM status"""
+    try:
+        # Basic information
+        debug_info = {
+            "llm_model": settings.LLM_MODEL,
+            "has_api_token": bool(settings.HUGGINGFACE_API_TOKEN),
+            "api_token_length": len(settings.HUGGINGFACE_API_TOKEN) if settings.HUGGINGFACE_API_TOKEN else 0,
+            "temperature": settings.LLM_TEMPERATURE,
+            "max_length": settings.LLM_MAX_LENGTH
+        }
+        
+        # Test a simple prompt if token is available
+        if settings.HUGGINGFACE_API_TOKEN:
+            try:
+                test_result = llm_service.llm.invoke("Say hello world!")
+                debug_info["test_result"] = "Success"
+                debug_info["test_output"] = test_result[:100] + "..." if len(test_result) > 100 else test_result
+            except Exception as e:
+                debug_info["test_result"] = "Failed"
+                debug_info["test_error"] = str(e)
+        
+        return jsonify(debug_info)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8081, debug=True)

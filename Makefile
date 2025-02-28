@@ -1,6 +1,15 @@
-.PHONY: setup install-backend install-frontend run-backend run-frontend run-all clean test test-backend test-e2e debug-backend debug-all
+.PHONY: setup install-backend install-frontend run-backend run-frontend run-all clean test test-backend test-e2e debug-backend debug-all setup-env
 
 setup: install-backend install-frontend
+
+setup-env:
+	@echo "Setting up environment variables..."
+	@if [ ! -f backend/.env ]; then \
+		cp backend/.env.example backend/.env; \
+		echo "Created .env file. Please edit backend/.env and add your Hugging Face API token"; \
+	else \
+		echo "backend/.env already exists"; \
+	fi
 
 install-backend:
 	@echo "Installing Python dependencies..."

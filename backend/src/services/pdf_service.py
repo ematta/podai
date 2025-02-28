@@ -3,6 +3,9 @@ from typing import List, Dict
 from dataclasses import dataclass
 import os
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 # PDF processing classes and functions here...
 
@@ -83,3 +86,38 @@ def process_tables(page) -> List[Table]:
             cells.append(cell_row)
         tables.append(Table(cells))
     return tables
+
+class PdfService:
+    def __init__(self):
+        logger.info("Initializing PDF service")
+    
+    def process_text(self, text: str) -> List[PDFElement]:
+        return process_text(text)
+    
+    def clean_text(self, text: str) -> str:
+        return clean_text(text)
+    
+    def process_tables(self, page) -> List[Table]:
+        return process_tables(page)
+    
+    def PdfReader(self, path: str):
+        try:
+            return PdfReader(path)
+        except Exception as e:
+            logger.error(f"Error reading PDF {path}: {str(e)}")
+            raise
+    
+    def markdown_to_text(self, markdown: str) -> str:
+        """Convert markdown to plain text by removing basic markdown syntax"""
+        # Remove headers
+        text = re.sub(r'^#+\s+', '', markdown, flags=re.MULTILINE)
+        # Remove emphasis
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+        text = re.sub(r'\*(.*?)\*', r'\1', text)
+        # Remove lists
+        text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+        return text
+
+# Initialize the service
+pdf_service = PdfService()
