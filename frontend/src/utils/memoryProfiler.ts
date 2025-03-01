@@ -24,8 +24,25 @@ type MemoryLogEntry = {
   tag?: string;
 };
 
+// Declare types for browser timers to prevent confusion with Node.js types
+type BrowserTimerId = number | NodeJS.Timeout;
+
+/**
+ * Type-safe wrapper for setInterval to handle both browser and Node.js environments
+ */
+function createInterval(callback: () => void, ms: number): BrowserTimerId {
+  return setInterval(callback, ms);
+}
+
+/**
+ * Type-safe wrapper for clearInterval to handle both browser and Node.js environments
+ */
+function clearIntervalSafe(id: BrowserTimerId): void {
+  clearInterval(id);
+}
+
 let memoryLog: MemoryLogEntry[] = [];
-let profilingInterval: number | NodeJS.Timeout | null = null;
+let profilingInterval: BrowserTimerId | null = null;
 
 /**
  * Format bytes to human-readable format
@@ -93,7 +110,7 @@ export function startMemoryProfiling(intervalMs = 60000, logToConsole = true): v
   }
   
   // Start interval for regular memory checks
-  profilingInterval = window.setInterval(() => {
+  profilingInterval = createInterval(() => {
     const memoryInfo = getMemoryInfo();
     
     memoryLog.push({
@@ -110,17 +127,14 @@ export function startMemoryProfiling(intervalMs = 60000, logToConsole = true): v
 }
 
 /**
- * Stop memory profiling
- * @returns The collected memory log
+ * Stop memory profiling and return memory log
  */
 export function stopMemoryProfiling(): MemoryLogEntry[] {
   if (profilingInterval !== null) {
-    clearInterval(profilingInterval);
+    clearIntervalSafe(profilingInterval);
     profilingInterval = null;
-    console.log('Memory profiling stopped');
   }
-  
-  return memoryLog;
+  return [...memoryLog];
 }
 
 /**
@@ -165,24 +179,14 @@ export function downloadMemoryLog(): void {
 /**
  * Create a memory profiling component that can be added to development builds
  */
-export function createMemoryProfilerInterface(): HTMLElement {
-  const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.bottom = '10px';
-  container.style.right = '10px';
-  container.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-  container.style.color = 'white';
-  container.style.padding = '10px';
-  container.style.borderRadius = '5px';
-  container.style.zIndex = '9999';
-  container.style.fontSize = '12px';
-  container.style.fontFamily = 'monospace';
-  
+export function createMemoryProfilerInterface(container: HTMLElement): void {
   // Create UI elements
-  const header = document.createElement('div');
+  const header = document.createElement('h3');
   header.textContent = 'Memory Profiler';
   header.style.fontWeight = 'bold';
   header.style.marginBottom = '5px';
+  header.style.fontSize = '14px';
+  header.style.margin = '0 0 8px 0';
   
   const memoryDisplay = document.createElement('div');
   memoryDisplay.id = 'memory-display';
@@ -193,11 +197,27 @@ export function createMemoryProfilerInterface(): HTMLElement {
   buttonContainer.style.display = 'flex';
   buttonContainer.style.gap = '5px';
   
+  // Keep track of interval ID
+  let updateInterval: BrowserTimerId | null = null;
+  
+  function updateMemoryDisplay() {
+    const memoryInfo = getMemoryInfo();
+    
+    if (memoryInfo.formatted) {
+      memoryDisplay.innerHTML = `
+        Heap Size: ${memoryInfo.formatted.usedJSHeapSize} / ${memoryInfo.formatted.jsHeapSizeLimit}<br>
+        Usage: ${memoryInfo.formatted.usagePercentage}
+      `;
+    } else {
+      memoryDisplay.textContent = 'Memory API not available in this browser';
+    }
+  }
+  
   const startButton = document.createElement('button');
   startButton.textContent = 'Start';
   startButton.onclick = () => {
     startMemoryProfiling(5000, true);
-    updateInterval = setInterval(updateMemoryDisplay, 1000);
+    updateInterval = createInterval(updateMemoryDisplay, 1000);
     startButton.disabled = true;
     stopButton.disabled = false;
   };
@@ -207,7 +227,10 @@ export function createMemoryProfilerInterface(): HTMLElement {
   stopButton.disabled = true;
   stopButton.onclick = () => {
     stopMemoryProfiling();
-    clearInterval(updateInterval);
+    if (updateInterval !== null) {
+      clearIntervalSafe(updateInterval);
+      updateInterval = null;
+    }
     startButton.disabled = false;
     stopButton.disabled = true;
   };
@@ -232,26 +255,8 @@ export function createMemoryProfilerInterface(): HTMLElement {
   container.appendChild(memoryDisplay);
   container.appendChild(buttonContainer);
   
-  // Update memory display
-  let updateInterval: number | NodeJS.Timeout;
-  
-  function updateMemoryDisplay() {
-    const memoryInfo = getMemoryInfo();
-    
-    if (memoryInfo.formatted) {
-      memoryDisplay.innerHTML = `
-        Heap Size: ${memoryInfo.formatted.usedJSHeapSize} / ${memoryInfo.formatted.jsHeapSizeLimit}<br>
-        Usage: ${memoryInfo.formatted.usagePercentage}
-      `;
-    } else {
-      memoryDisplay.textContent = 'Memory API not available in this browser';
-    }
-  }
-  
   // Initial display update
   updateMemoryDisplay();
-  
-  return container;
 }
 
 /**
@@ -262,12 +267,58 @@ export function initDevMemoryProfiler(): void {
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
-        const profilerInterface = createMemoryProfilerInterface();
+        const profilerInterface = document.createElement('div');
         document.body.appendChild(profilerInterface);
+        createMemoryProfilerInterface(profilerInterface);
       });
     } else {
-      const profilerInterface = createMemoryProfilerInterface();
+      const profilerInterface = document.createElement('div');
       document.body.appendChild(profilerInterface);
+      createMemoryProfilerInterface(profilerInterface);
+    }
+  }
+}
+
+/**
+ * Attach memory profiler to page
+ */
+export function attachMemoryProfilerToPage(): void {
+  if (typeof document !== 'undefined') {
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        const profilerInterface = document.createElement('div');
+        // Apply styling
+        profilerInterface.style.position = 'fixed';
+        profilerInterface.style.bottom = '10px';
+        profilerInterface.style.right = '10px';
+        profilerInterface.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        profilerInterface.style.color = 'white';
+        profilerInterface.style.padding = '10px';
+        profilerInterface.style.borderRadius = '5px';
+        profilerInterface.style.zIndex = '9999';
+        profilerInterface.style.fontSize = '12px';
+        profilerInterface.style.fontFamily = 'monospace';
+        
+        document.body.appendChild(profilerInterface);
+        createMemoryProfilerInterface(profilerInterface);
+      });
+    } else {
+      const profilerInterface = document.createElement('div');
+      // Apply styling
+      profilerInterface.style.position = 'fixed';
+      profilerInterface.style.bottom = '10px';
+      profilerInterface.style.right = '10px';
+      profilerInterface.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+      profilerInterface.style.color = 'white';
+      profilerInterface.style.padding = '10px';
+      profilerInterface.style.borderRadius = '5px';
+      profilerInterface.style.zIndex = '9999';
+      profilerInterface.style.fontSize = '12px';
+      profilerInterface.style.fontFamily = 'monospace';
+      
+      document.body.appendChild(profilerInterface);
+      createMemoryProfilerInterface(profilerInterface);
     }
   }
 }

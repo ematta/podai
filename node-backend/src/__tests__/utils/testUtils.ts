@@ -2,6 +2,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
+// Define the progress entry type
+interface ProgressEntry {
+  progress: number;
+  status: 'pending' | 'completed' | 'error';
+  message: string;
+}
+
+// Augment the global namespace to include our progressMap
+declare global {
+  var progressMap: Map<string, ProgressEntry>;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadDir = path.join(path.resolve(__dirname, '../../..'), 'test-uploads');
@@ -47,7 +59,7 @@ export const setupTestProgress = (
 ): string => {
   // Ensure global progressMap exists
   if (!global.progressMap) {
-    global.progressMap = new Map();
+    global.progressMap = new Map<string, ProgressEntry>();
   }
   
   // Add test progress entry
@@ -61,11 +73,29 @@ export const setupTestProgress = (
 };
 
 /**
- * Clean up test progress entry
- * @param progressId ID of progress to clean up
+ * Get progress entry for testing
+ * @param progressId ID to get progress for
+ * @returns The progress entry or undefined if not found
+ */
+export const getTestProgress = (progressId: string): ProgressEntry | undefined => {
+  return global.progressMap?.get(progressId);
+};
+
+/**
+ * Clean up a test progress entry
+ * @param progressId ID to clean up
  */
 export const cleanupTestProgress = (progressId: string): void => {
-  if (global.progressMap && global.progressMap.has(progressId)) {
+  if (global.progressMap) {
     global.progressMap.delete(progressId);
+  }
+};
+
+/**
+ * Clean up all test progress entries
+ */
+export const cleanupAllTestProgress = (): void => {
+  if (global.progressMap) {
+    global.progressMap.clear();
   }
 };

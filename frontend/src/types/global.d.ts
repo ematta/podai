@@ -16,9 +16,9 @@ interface Performance {
 
 // Explicitly define NodeJS namespace to avoid conflicts
 declare namespace NodeJS {
-  // This empty interface prevents TypeScript from using NodeJS.Timeout
-  // when we're in a browser environment
-  interface Timeout {}
+  // Instead of trying to define a Timeout type, we'll declare it as a number type
+  // This matches the browser's return type for setInterval/setTimeout
+  type Timeout = number;
 }
 
 // No need to redefine the timer functions as TypeScript will now

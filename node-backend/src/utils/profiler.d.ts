@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 /**
  * Memory usage information with formatted values
  */

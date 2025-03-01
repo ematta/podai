@@ -17,6 +17,7 @@
       "@/*": ["src/*"]
     },
     "lib": ["ES2022"],
+    "types": ["node"],
     "typeRoots": ["./node_modules/@types", "./src/types"]
   },
   "include": ["src/**/*"],

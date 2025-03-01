@@ -115,7 +115,7 @@ app.get('/progress/:id', (req: express.Request, res: express.Response) => {
       });
     }
     
-    return res.status(404).json({ error: 'No progress data found for this ID' });
+    return res.status(404).json({ error: 'Progress data not found for the given ID' });
   }
   
   // If operation is complete, remove from tracker after sending
@@ -332,9 +332,10 @@ app.post('/api/generate-script', async (req, res) => {
 app.get('/api/progress/:id', (req, res) => {
   const { id } = req.params;
   const progress = ProgressTracker.getProgress(id);
+  console.log(`GET /api/progress/${id}:`, { exists: !!progress, progress });
   
   if (!progress) {
-    return res.status(404).json({ error: 'Progress not found' });
+    return res.status(404).json({ error: 'No progress data found for this ID' });
   }
   
   res.json(progress);
