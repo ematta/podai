@@ -1,0 +1,13 @@
+// Main SCSS file - imports all modular style files
+
+// Import base styles (variables, mixins, reset)
+@use './base' as *;
+
+// Import component styles
+@use './components' as *;
+
+// You can add more modular imports here as your application grows:
+// @import './layouts.scss';
+// @import './pages.scss';
+// @import './themes.scss';
+// @import './animations.scss';
