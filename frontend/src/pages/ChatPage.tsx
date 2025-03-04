@@ -3,7 +3,6 @@ import { Box, Button, Container, Typography, Paper, Input, Switch, FormControlLa
 import PdfUploader from '../components/PdfUploader';
 import ChatWindow from '../components/ChatWindow';
 import ProgressBar from '../components/ProgressBar';
-import TestUtils from '../components/TestUtils';
 import * as api from '../services/api';
 import { ChatMessage } from '../types/index';
 
@@ -54,32 +53,6 @@ const ChatPage = () => {
       const errorMessage = err instanceof Error 
         ? err.message 
         : 'Failed to upload PDF';
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleTestPdfSelect = async (pdfPath: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      setProgress(0);
-      setProgressMessage('Processing test PDF...');
-      setChatMessages([]);
-      
-      const { fileId } = await api.loadTestPdf(pdfPath, (progress, message) => {
-        setProgress(progress);
-        setProgressMessage(message);
-      });
-      
-      setFileId(fileId);
-      
-    } catch (err: unknown) {
-      console.error('Error loading test PDF:', err);
-      const errorMessage = err instanceof Error 
-        ? err.message 
-        : 'Failed to load test PDF';
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -209,9 +182,6 @@ const ChatPage = () => {
             onFileChange={handleFileChange}
             onUpload={handleUpload}
           />
-          
-          {/* Test utilities for easy testing */}
-          <TestUtils onTestPdfSelect={handleTestPdfSelect} />
         </Box>
         
         {isLoading && (

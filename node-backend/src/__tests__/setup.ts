@@ -1,3 +1,7 @@
+import { fileURLToPath } from 'url';
+import * as path from 'path';
+import * as fs from 'fs';
+
 // Set testing environment
 process.env.NODE_ENV = 'test';
 process.env.TESTING = 'TRUE';
@@ -9,10 +13,6 @@ process.env.UPLOAD_FOLDER = 'test-uploads';
 process.env.LLM_MODEL = 'test-model';
 
 // Create test uploads directory
-import { fileURLToPath } from 'url';
-import * as path from 'path';
-import * as fs from 'fs';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadDir = path.join(path.resolve(__dirname, '../..'), 'test-uploads');
@@ -20,8 +20,3 @@ const uploadDir = path.join(path.resolve(__dirname, '../..'), 'test-uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
-
-// Clean up function to run after tests
-afterAll(() => {
-  // Cleanup could be implemented here if needed
-});

@@ -1,7 +1,10 @@
 import { PDFList } from '../types/index';
 
 // Backend server URL
-const API_BASE_URL = 'http://localhost:8081';
+// Use environment-aware base URL: service name in Docker, localhost in development
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8081'  // Development environment
+  : 'http://backend:3000';    // Docker environment
 
 export const convertPdfToMarkdown = async (file: File) => {
   const formData = new FormData();
@@ -176,6 +179,8 @@ export async function pollProgress(
 ): Promise<boolean> {
   let retries = 0;
   const maxRetries = 100; // More retries for longer processing
+  const initialDelay = 1000; // Initial delay of 1 second
+  const maxDelay = 5000; // Maximum delay of 5 seconds
   
   return new Promise((resolve, reject) => {
     const poll = async (): Promise<boolean> => {
@@ -225,22 +230,37 @@ export async function pollProgress(
         }
         
         retries++;
-        // Adaptive polling - slower as time progresses
-        const delay = Math.min(1000 + (retries * 100), 3000);
-        setTimeout(() => poll(), delay);
+        // Exponential backoff with jitter and max delay
+        const exponentialDelay = Math.min(
+          initialDelay * Math.pow(1.5, retries) + Math.random() * 500,
+          maxDelay
+        );
+        setTimeout(() => poll(), exponentialDelay);
         return false;
       } catch (error: unknown) {
         console.error('Error polling progress:', error);
         const errorMessage = error instanceof Error 
           ? error.message 
           : 'Failed to poll progress';
+        
+        // For network errors, retry with exponential backoff
+        if (retries < maxRetries) {
+          retries++;
+          const exponentialDelay = Math.min(
+            initialDelay * Math.pow(1.5, retries) + Math.random() * 500,
+            maxDelay
+          );
+          setTimeout(() => poll(), exponentialDelay);
+          return false;
+        }
+        
         reject(new Error(errorMessage));
         return false;
       }
     };
     
-    // Start polling
-    poll();
+    // Start polling with initial delay
+    setTimeout(() => poll(), initialDelay);
   });
 }
 

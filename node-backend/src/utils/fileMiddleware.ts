@@ -1,11 +1,13 @@
 import multer from 'multer';
 import { Request, Response, NextFunction } from 'express';
+import path from 'path';
+import fs from 'fs';
 import { settings } from '../config/settings.js';
 import { createLogger } from '../config/logger.js';
 
 const logger = createLogger('file-middleware');
 
-// Configure multer for file storage
+// Use memory storage for multer to handle file uploads
 const storage = multer.memoryStorage();
 
 // Create multer instance

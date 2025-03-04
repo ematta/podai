@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -11,4 +12,17 @@ export default defineConfig({
       '/api': 'http://localhost:8081',
     },
   },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        // Using modern Sass module system
+        additionalData: ''
+      }
+    }
+  },
+  resolve: {
+    alias: {
+      '@styles': path.resolve(__dirname, './src/styles')
+    }
+  }
 })

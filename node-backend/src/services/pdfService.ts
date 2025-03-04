@@ -104,6 +104,21 @@ class PdfService {
   /**
    * Extract text from PDF
    */
+  /**
+   * Parse PDF file and extract data
+   */
+  public async parsePdf(filePath: string): Promise<PDFData> {
+    try {
+      const dataBuffer = fs.readFileSync(filePath);
+      const data = await pdfParse(dataBuffer);
+      logger.info(`Successfully parsed PDF with ${data.numpages} pages`);
+      return data;
+    } catch (error) {
+      logger.error(`Error parsing PDF: ${error}`);
+      throw new Error(`Could not parse PDF: ${error}`);
+    }
+  }
+
   public async extractTextFromPdf(filePath: string): Promise<string> {
     try {
       const dataBuffer = fs.readFileSync(filePath);

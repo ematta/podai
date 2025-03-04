@@ -12,6 +12,9 @@ services:
       - PORT=3000
       - LOG_LEVEL=info
       - MAX_UPLOAD_SIZE=10485760
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - USE_LOCAL_MODEL=true
+      - OLLAMA_MODEL=granite3.2
       # Add other environment variables as needed
       # - OPENAI_API_KEY=${OPENAI_API_KEY}
       # - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY}
@@ -19,7 +22,7 @@ services:
       - backend_uploads:/app/uploads
       - backend_data:/app/data
     ports:
-      - "3000:3000"
+      - "8081:3000"
     networks:
       - podai-network
 
@@ -36,25 +39,14 @@ services:
     networks:
       - podai-network
 
-  frontend-test:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.test
-    container_name: podai-frontend-test
+  ollama:
+    image: ollama/ollama:latest
+    container_name: podai-ollama
+    restart: unless-stopped
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    networks:
-      - podai-network
-
-  backend-test:
-    build:
-      context: ./node-backend
-      dockerfile: Dockerfile.test
-    container_name: podai-backend-test
-    volumes:
-      - ./node-backend:/app
-      - /app/node_modules
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
     networks:
       - podai-network
 
@@ -82,3 +74,5 @@ volumes:
   backend_uploads:
   backend_data:
   # db_data:
+  ollama:
+    driver: local

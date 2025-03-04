@@ -1,15 +1,18 @@
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
-# Copy package files
+# Install required system libraries for ARM64
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libc6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies first (for better caching)
 COPY package*.json ./
+RUN npm install
 
-# Install dependencies including dev dependencies for testing
-RUN npm ci
-
-# Copy source code and tests
+# Copy source code
 COPY . .
 
-# Run tests
+# Command to run tests
 CMD ["npm", "test"]

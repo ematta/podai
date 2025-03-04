@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b tsconfig.app.json && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run --exclude='tests/e2e/**'",
@@ -27,7 +27,8 @@
     "marked": "^15.0.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-toastify": "^10.0.4"
+    "react-toastify": "^10.0.4",
+    "sass": "^1.85.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
