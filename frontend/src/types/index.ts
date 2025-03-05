@@ -11,11 +11,11 @@ export interface PDFList {
 }
 
 // Chat-related types
-export interface ChatMessage {
-  role: 'user' | 'system' | 'assistant';
+export type ChatMessage = {
+  type: 'user' | 'assistant' | 'system';
   content: string;
-  sources?: string[]; // References to document sources (e.g., page numbers, sections)
-}
+  timestamp: string;
+};
 
 // Script response
 export interface ScriptResponse {

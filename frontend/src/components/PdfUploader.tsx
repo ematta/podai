@@ -36,7 +36,7 @@ const PdfUploader: React.FC<Props> = ({
 
   return (
     <div className="upload-section" data-testid="pdf-uploader">
-      <h2>Upload PDF for Podcast Script Generation</h2>
+      <h2>Upload PDF for Chat Analysis</h2>
       
       <input
         type="file"
@@ -83,7 +83,7 @@ const PdfUploader: React.FC<Props> = ({
           className="convert-button"
           data-testid="upload-button"
         >
-          Convert to Podcast Script
+          Process PDF for Chat
         </button>
       )}
       

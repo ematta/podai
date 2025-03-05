@@ -262,21 +262,11 @@ export function createMemoryProfilerInterface(container: HTMLElement): void {
 /**
  * Initialize memory profiler in development mode
  */
-export function initDevMemoryProfiler(): void {
-  if (process.env.NODE_ENV === 'development' || process.env.REACT_APP_ENABLE_PROFILING === 'true') {
-    // Wait for DOM to be ready
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        const profilerInterface = document.createElement('div');
-        document.body.appendChild(profilerInterface);
-        createMemoryProfilerInterface(profilerInterface);
-      });
-    } else {
-      const profilerInterface = document.createElement('div');
-      document.body.appendChild(profilerInterface);
-      createMemoryProfilerInterface(profilerInterface);
-    }
-  }
+export function initDevMemoryProfiler() {
+  // This is deliberately empty - just a placeholder to prevent
+  // import errors during the build process
+  console.log('Memory profiler is a no-op in this build');
+  return null;
 }
 
 /**

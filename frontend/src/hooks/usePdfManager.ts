@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import api from '../services/api'
-import { ScriptResponse } from '../types/index'
 
 export const usePdfManager = () => {
   const [file, setFile] = useState<File | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [script, setScript] = useState('')
+  const [progressMessage, setProgressMessage] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [currentPdfId, setCurrentPdfId] = useState<string>('')
@@ -20,7 +19,10 @@ export const usePdfManager = () => {
       }
       setFile(selectedFile)
       setUploadProgress(0)
+      setProgressMessage('')
       setError('')
+    } else {
+      setFile(null)
     }
   }
 
@@ -39,55 +41,37 @@ export const usePdfManager = () => {
 
     setIsLoading(true)
     setError('')
-    const formData = new FormData()
-    formData.append('file', file)
+    setUploadProgress(0)
+    setProgressMessage('')
 
     try {
-      const xhr = new XMLHttpRequest()
-      xhr.open('POST', 'http://localhost:8081/upload', true)
+      const result = await api.uploadPdfWithEmbeddings(file, (progress, message) => {
+        setUploadProgress(progress)
+        setProgressMessage(message)
+      })
       
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const progress = (event.loaded / event.total) * 100
-          setUploadProgress(Math.round(progress))
-        }
-      }
+      setCurrentPdfId(result.fileId)
       
-      xhr.onload = () => {
-        if (xhr.status === 200) {
-          const response = JSON.parse(xhr.responseText) as ScriptResponse
-          setScript(response.script)
-          setCurrentPdfId(response.id || '')
-          loadStoredPdfs() // Refresh the list of PDFs
-        } else {
-          setError('Upload failed')
-        }
-        setIsLoading(false)
-      }
+      // Refresh the list of PDFs after successful upload
+      await loadStoredPdfs()
       
-      xhr.onerror = () => {
-        setError('Upload failed due to network error')
-        setIsLoading(false)
-      }
-      
-      xhr.send(formData)
-      
-      return null // This function no longer returns the response data
+      return result.fileId
     } catch (error: unknown) {
       console.error('Error uploading PDF:', error)
       const errorMessage = error instanceof Error 
         ? error.message 
         : 'Failed to upload PDF'
       setError(errorMessage)
-      setIsLoading(false)
       return null
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return {
     file,
     uploadProgress,
-    script,
+    progressMessage,
     error,
     isLoading,
     currentPdfId,
