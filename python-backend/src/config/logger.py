@@ -33,13 +33,22 @@ def setup_logger(name, log_level=None):
     # Add handler to logger
     logger.addHandler(console_handler)
     
-    # Create file handler if LOG_FILE is set
-    log_file = os.getenv("LOG_FILE")
-    if log_file:
-        file_handler = RotatingFileHandler(log_file, maxBytes=10485760, backupCount=5)
-        file_handler.setLevel(numeric_level)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+    # Always create a file handler with default path to /app/logs/app.log
+    logs_directory = os.environ.get('LOG_DIRECTORY', '/app/logs')
+    log_file = os.environ.get('LOG_FILE', f'{logs_directory}/app.log')
+    
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    
+    # Create rotating file handler
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10485760,  # 10MB
+        backupCount=5
+    )
+    file_handler.setLevel(numeric_level)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
     
     return logger
 

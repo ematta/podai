@@ -4,6 +4,8 @@ python-multipart==0.0.9
 pydantic==2.6.3
 gunicorn==21.2.0
 langchain==0.1.12
+langchain-openai==0.0.5
+openai==1.14.1
 chromadb==0.4.24
 pypdf==4.0.2
 numpy==1.26.4

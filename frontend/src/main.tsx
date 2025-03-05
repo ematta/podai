@@ -2,7 +2,13 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
 
-// Simple try-catch to help debug mounting issues
+/**
+ * Main application entry point
+ * Mounts the React application to the DOM
+ * 
+ * Includes error handling to help debug mounting issues and
+ * displays user-friendly error messages if mounting fails
+ */
 try {
   // Get root element
   const rootElement = document.getElementById('root');

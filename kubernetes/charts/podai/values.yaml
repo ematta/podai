@@ -15,6 +15,7 @@ backend:
   service:
     type: ClusterIP
     port: 3000
+    url: http://podai-backend:3000
   resources:
     limits:
       cpu: 1
@@ -27,6 +28,8 @@ backend:
     PORT: 3000
     LOG_LEVEL: info
     MAX_UPLOAD_SIZE: 10485760
+    # Configure ChromaDB integration
+    CHROMADB_ENABLED: "false"
   # Secret environment variables - override these with actual values
   secretEnv:
     # OPENAI_API_KEY: ""

@@ -1,11 +1,28 @@
 /**
- * Browser memory profiling utility
+ * Browser Memory Profiling Utility
  * 
- * This utility helps track memory usage in the browser.
- * It uses the Performance API when available.
+ * This module provides tools for tracking and analyzing memory usage in the browser.
+ * It includes functions for memory monitoring, logging, and visualization.
+ * 
+ * @module memoryProfiler
  */
 
-// Type definitions
+// ---------------------------------
+// Types
+// ---------------------------------
+
+/**
+ * Memory information object with raw and formatted values
+ * @typedef {Object} MemoryInfo
+ * @property {number} [jsHeapSizeLimit] - Maximum heap size limit
+ * @property {number} [totalJSHeapSize] - Total allocated heap size
+ * @property {number} [usedJSHeapSize] - Currently used heap size
+ * @property {Object} [formatted] - Human-readable formatted values
+ * @property {string} [formatted.jsHeapSizeLimit] - Formatted heap size limit
+ * @property {string} [formatted.totalJSHeapSize] - Formatted total heap size
+ * @property {string} [formatted.usedJSHeapSize] - Formatted used heap size
+ * @property {string} [formatted.usagePercentage] - Heap usage as percentage
+ */
 type MemoryInfo = {
   jsHeapSizeLimit?: number;
   totalJSHeapSize?: number;
@@ -18,34 +35,70 @@ type MemoryInfo = {
   };
 };
 
+/**
+ * Entry in the memory log with timestamp and optional tag
+ * @typedef {Object} MemoryLogEntry
+ * @property {number} timestamp - Unix timestamp when entry was recorded
+ * @property {MemoryInfo} memory - Memory information at this time
+ * @property {string} [tag] - Optional identifier for this entry
+ */
 type MemoryLogEntry = {
   timestamp: number;
   memory: MemoryInfo;
   tag?: string;
 };
 
-// Declare types for browser timers to prevent confusion with Node.js types
+/**
+ * Type for browser timer IDs, accommodating both browser and Node.js environments
+ * @typedef {number | NodeJS.Timeout} BrowserTimerId
+ */
 type BrowserTimerId = number | NodeJS.Timeout;
 
+// ---------------------------------
+// Module State
+// ---------------------------------
+
 /**
- * Type-safe wrapper for setInterval to handle both browser and Node.js environments
+ * In-memory storage for memory profiling data
+ * @private
+ */
+let memoryLog: MemoryLogEntry[] = [];
+
+/**
+ * Reference to the active profiling interval timer
+ * @private
+ */
+let profilingInterval: BrowserTimerId | null = null;
+
+// ---------------------------------
+// Utility Functions
+// ---------------------------------
+
+/**
+ * Type-safe wrapper for setInterval that works in both browser and Node.js environments
+ * @private
+ * @param {Function} callback - Function to execute periodically
+ * @param {number} ms - Interval in milliseconds
+ * @returns {BrowserTimerId} Timer identifier
  */
 function createInterval(callback: () => void, ms: number): BrowserTimerId {
   return setInterval(callback, ms);
 }
 
 /**
- * Type-safe wrapper for clearInterval to handle both browser and Node.js environments
+ * Type-safe wrapper for clearInterval that works in both browser and Node.js environments
+ * @private
+ * @param {BrowserTimerId} id - Timer identifier to clear
  */
 function clearIntervalSafe(id: BrowserTimerId): void {
   clearInterval(id);
 }
 
-let memoryLog: MemoryLogEntry[] = [];
-let profilingInterval: BrowserTimerId | null = null;
-
 /**
- * Format bytes to human-readable format
+ * Format bytes to human-readable format with appropriate units
+ * @private
+ * @param {number} [bytes] - Bytes to format
+ * @returns {string} Human-readable string with appropriate unit suffix
  */
 function formatBytes(bytes?: number): string {
   if (bytes === undefined) return 'N/A';
@@ -58,15 +111,21 @@ function formatBytes(bytes?: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
 }
 
+// ---------------------------------
+// Core Memory Profiling API
+// ---------------------------------
+
 /**
- * Get current memory usage if available
+ * Get current memory usage from the browser if available
+ * @public
+ * @returns {MemoryInfo} Current memory information or empty object if unavailable
  */
 export function getMemoryInfo(): MemoryInfo {
   // Check if performance.memory is available (Chrome only feature)
   const performance = window.performance;
   
-  if (performance && performance.memory) {
-    const memory = performance.memory;
+  if (performance && 'memory' in performance) {
+    const memory = performance.memory as any;
     const usagePercentage = (memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100;
     
     return {
@@ -86,9 +145,10 @@ export function getMemoryInfo(): MemoryInfo {
 }
 
 /**
- * Start memory profiling
- * @param intervalMs - Interval in milliseconds between memory checks
- * @param logToConsole - Whether to log memory info to console
+ * Start memory profiling at regular intervals
+ * @public
+ * @param {number} [intervalMs=60000] - Interval between memory checks in milliseconds
+ * @param {boolean} [logToConsole=true] - Whether to log each check to the console
  */
 export function startMemoryProfiling(intervalMs = 60000, logToConsole = true): void {
   // Clear any existing profiling
@@ -99,11 +159,7 @@ export function startMemoryProfiling(intervalMs = 60000, logToConsole = true): v
   
   // Log initial memory state
   const initialMemory = getMemoryInfo();
-  memoryLog.push({
-    timestamp: Date.now(),
-    memory: initialMemory,
-    tag: 'Initial'
-  });
+  recordMemorySnapshot('Initial', initialMemory);
   
   if (logToConsole) {
     console.log('Initial memory usage:', initialMemory);
@@ -113,10 +169,7 @@ export function startMemoryProfiling(intervalMs = 60000, logToConsole = true): v
   profilingInterval = createInterval(() => {
     const memoryInfo = getMemoryInfo();
     
-    memoryLog.push({
-      timestamp: Date.now(),
-      memory: memoryInfo
-    });
+    recordMemorySnapshot(undefined, memoryInfo);
     
     if (logToConsole) {
       console.log('Memory usage:', memoryInfo);
@@ -127,28 +180,42 @@ export function startMemoryProfiling(intervalMs = 60000, logToConsole = true): v
 }
 
 /**
- * Stop memory profiling and return memory log
+ * Stop memory profiling and return the collected data
+ * @public
+ * @returns {MemoryLogEntry[]} Array of recorded memory log entries
  */
 export function stopMemoryProfiling(): MemoryLogEntry[] {
   if (profilingInterval !== null) {
     clearIntervalSafe(profilingInterval);
     profilingInterval = null;
+    console.log('Memory profiling stopped');
   }
   return [...memoryLog];
 }
 
 /**
- * Take a memory snapshot with an optional tag
- * @param tag - Optional tag to identify this snapshot
+ * Records a memory snapshot in the internal log
+ * @private
+ * @param {string} [tag] - Optional tag to identify this snapshot
+ * @param {MemoryInfo} memoryInfo - Memory information to record
  */
-export function takeMemorySnapshot(tag?: string): MemoryInfo {
-  const memoryInfo = getMemoryInfo();
-  
+function recordMemorySnapshot(tag?: string, memoryInfo: MemoryInfo = getMemoryInfo()): void {
   memoryLog.push({
     timestamp: Date.now(),
     memory: memoryInfo,
     tag
   });
+}
+
+/**
+ * Take a memory snapshot with an optional tag
+ * @public
+ * @param {string} [tag] - Optional tag to identify this snapshot
+ * @returns {MemoryInfo} Current memory information
+ */
+export function takeMemorySnapshot(tag?: string): MemoryInfo {
+  const memoryInfo = getMemoryInfo();
+  recordMemorySnapshot(tag, memoryInfo);
   
   console.log(`Memory snapshot ${tag ? `(${tag})` : ''}:`, memoryInfo);
   
@@ -156,7 +223,8 @@ export function takeMemorySnapshot(tag?: string): MemoryInfo {
 }
 
 /**
- * Download memory log as JSON file
+ * Download memory log as JSON file for further analysis
+ * @public
  */
 export function downloadMemoryLog(): void {
   const data = JSON.stringify(memoryLog, null, 2);
@@ -176,30 +244,74 @@ export function downloadMemoryLog(): void {
   }, 100);
 }
 
+// ---------------------------------
+// UI Components for Memory Profiling
+// ---------------------------------
+
 /**
- * Create a memory profiling component that can be added to development builds
+ * Create styling for a button element
+ * @private
+ * @param {HTMLButtonElement} button - Button to style
+ */
+function styleButton(button: HTMLButtonElement): void {
+  Object.assign(button.style, {
+    padding: '4px 8px',
+    margin: '0 4px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    border: '1px solid #ccc',
+    borderRadius: '3px',
+    backgroundColor: '#f5f5f5',
+  });
+}
+
+/**
+ * Create a memory profiler UI component to monitor and control profiling
+ * @public
+ * @param {HTMLElement} container - Container element to add the profiler to
  */
 export function createMemoryProfilerInterface(container: HTMLElement): void {
+  // Create wrapper with styling
+  const wrapper = document.createElement('div');
+  Object.assign(wrapper.style, {
+    fontFamily: 'sans-serif',
+    fontSize: '12px',
+    padding: '10px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    backgroundColor: '#f9f9f9',
+    margin: '10px 0',
+    maxWidth: '300px',
+  });
+  
   // Create UI elements
   const header = document.createElement('h3');
   header.textContent = 'Memory Profiler';
-  header.style.fontWeight = 'bold';
-  header.style.marginBottom = '5px';
-  header.style.fontSize = '14px';
-  header.style.margin = '0 0 8px 0';
+  Object.assign(header.style, {
+    fontWeight: 'bold',
+    marginBottom: '5px',
+    fontSize: '14px',
+    margin: '0 0 8px 0',
+  });
   
   const memoryDisplay = document.createElement('div');
   memoryDisplay.id = 'memory-display';
   memoryDisplay.textContent = 'Memory: Not available';
   
   const buttonContainer = document.createElement('div');
-  buttonContainer.style.marginTop = '5px';
-  buttonContainer.style.display = 'flex';
-  buttonContainer.style.gap = '5px';
+  Object.assign(buttonContainer.style, {
+    marginTop: '5px',
+    display: 'flex',
+    gap: '5px',
+  });
   
   // Keep track of interval ID
   let updateInterval: BrowserTimerId | null = null;
   
+  /**
+   * Updates the memory display with current memory info
+   * @private
+   */
   function updateMemoryDisplay() {
     const memoryInfo = getMemoryInfo();
     
@@ -213,8 +325,10 @@ export function createMemoryProfilerInterface(container: HTMLElement): void {
     }
   }
   
+  // Create control buttons
   const startButton = document.createElement('button');
   startButton.textContent = 'Start';
+  styleButton(startButton);
   startButton.onclick = () => {
     startMemoryProfiling(5000, true);
     updateInterval = createInterval(updateMemoryDisplay, 1000);
@@ -225,6 +339,7 @@ export function createMemoryProfilerInterface(container: HTMLElement): void {
   const stopButton = document.createElement('button');
   stopButton.textContent = 'Stop';
   stopButton.disabled = true;
+  styleButton(stopButton);
   stopButton.onclick = () => {
     stopMemoryProfiling();
     if (updateInterval !== null) {
@@ -237,12 +352,14 @@ export function createMemoryProfilerInterface(container: HTMLElement): void {
   
   const snapshotButton = document.createElement('button');
   snapshotButton.textContent = 'Snapshot';
+  styleButton(snapshotButton);
   snapshotButton.onclick = () => {
     takeMemorySnapshot('Manual snapshot');
   };
   
   const downloadButton = document.createElement('button');
   downloadButton.textContent = 'Download';
+  styleButton(downloadButton);
   downloadButton.onclick = downloadMemoryLog;
   
   // Append elements
@@ -251,64 +368,55 @@ export function createMemoryProfilerInterface(container: HTMLElement): void {
   buttonContainer.appendChild(snapshotButton);
   buttonContainer.appendChild(downloadButton);
   
-  container.appendChild(header);
-  container.appendChild(memoryDisplay);
-  container.appendChild(buttonContainer);
+  wrapper.appendChild(header);
+  wrapper.appendChild(memoryDisplay);
+  wrapper.appendChild(buttonContainer);
   
-  // Initial display update
+  container.appendChild(wrapper);
+  
+  // Initial update
   updateMemoryDisplay();
 }
 
+// ---------------------------------
+// Development Utilities
+// ---------------------------------
+
 /**
- * Initialize memory profiler in development mode
+ * Initialize memory profiler for development
+ * Creates a profiler interface in a floating div
+ * @public
  */
 export function initDevMemoryProfiler() {
-  // This is deliberately empty - just a placeholder to prevent
-  // import errors during the build process
-  console.log('Memory profiler is a no-op in this build');
-  return null;
+  if (process.env.NODE_ENV !== 'production') {
+    const div = document.createElement('div');
+    Object.assign(div.style, {
+      position: 'fixed',
+      bottom: '10px',
+      right: '10px',
+      zIndex: '9999',
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      boxShadow: '0 0 10px rgba(0, 0, 0, 0.2)',
+      borderRadius: '4px',
+    });
+    document.body.appendChild(div);
+    createMemoryProfilerInterface(div);
+  }
 }
 
 /**
- * Attach memory profiler to page
+ * Attaches a memory profiler to the page
+ * Use this function in development to monitor memory usage
+ * @public
  */
 export function attachMemoryProfilerToPage(): void {
-  if (typeof document !== 'undefined') {
+  // Only attach in non-production environments
+  if (process.env.NODE_ENV !== 'production') {
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        const profilerInterface = document.createElement('div');
-        // Apply styling
-        profilerInterface.style.position = 'fixed';
-        profilerInterface.style.bottom = '10px';
-        profilerInterface.style.right = '10px';
-        profilerInterface.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        profilerInterface.style.color = 'white';
-        profilerInterface.style.padding = '10px';
-        profilerInterface.style.borderRadius = '5px';
-        profilerInterface.style.zIndex = '9999';
-        profilerInterface.style.fontSize = '12px';
-        profilerInterface.style.fontFamily = 'monospace';
-        
-        document.body.appendChild(profilerInterface);
-        createMemoryProfilerInterface(profilerInterface);
-      });
+      document.addEventListener('DOMContentLoaded', initDevMemoryProfiler);
     } else {
-      const profilerInterface = document.createElement('div');
-      // Apply styling
-      profilerInterface.style.position = 'fixed';
-      profilerInterface.style.bottom = '10px';
-      profilerInterface.style.right = '10px';
-      profilerInterface.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-      profilerInterface.style.color = 'white';
-      profilerInterface.style.padding = '10px';
-      profilerInterface.style.borderRadius = '5px';
-      profilerInterface.style.zIndex = '9999';
-      profilerInterface.style.fontSize = '12px';
-      profilerInterface.style.fontFamily = 'monospace';
-      
-      document.body.appendChild(profilerInterface);
-      createMemoryProfilerInterface(profilerInterface);
+      initDevMemoryProfiler();
     }
   }
 }

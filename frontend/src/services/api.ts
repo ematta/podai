@@ -30,7 +30,7 @@ export const convertPdfToMarkdown = async (file: File) => {
 export const uploadPdfWithEmbeddings = async (
   file: File, 
   onProgressUpdate?: (progress: number, message: string) => void
-): Promise<{ fileId: string }> => {
+): Promise<{ fileId: string; duplicate?: boolean }> => {
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -51,13 +51,28 @@ export const uploadPdfWithEmbeddings = async (
     
     const data = await response.json();
     
-    // Start polling for progress if we have a fileId
+    // Check if this is a duplicate PDF before starting progress polling
+    if (data.duplicate) {
+      // For duplicate PDFs, we skip processing and return the existing fileId
+      if (onProgressUpdate) {
+        // Notify that the PDF was found and loaded from ChromaDB
+        onProgressUpdate(100, 'PDF already exists in repository. Loaded from ChromaDB.');
+      }
+      
+      return {
+        fileId: data.fileId,
+        duplicate: true
+      };
+    }
+    
+    // For new PDFs, start polling for progress if we have a fileId
     if (onProgressUpdate && data.fileId) {
       pollProgress(data.fileId, onProgressUpdate);
     }
     
     return {
-      fileId: data.fileId
+      fileId: data.fileId,
+      duplicate: false
     };
   } catch (error: unknown) {
     console.error('Error uploading PDF:', error);

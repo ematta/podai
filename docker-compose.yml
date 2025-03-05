@@ -15,19 +15,24 @@ services:
       - PORT=3000
       - LOG_LEVEL=info
       - MAX_UPLOAD_SIZE=50000000
-      - USE_LOCAL_MODEL=true
+      - USE_LOCAL_MODEL=false
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      # Uncomment below if you want to use OpenAI instead of OpenRouter
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
       - APP_URL=${APP_URL}
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
       - UPLOAD_FOLDER=/tmp/uploads
       - UPLOAD_PATH=/api/pdf/upload
       - CHROMA_PROTOCOL=http
-      # Add other environment variables as needed
-      # - OPENAI_API_KEY=${OPENAI_API_KEY}
-      # - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY}
+      - LOG_DIRECTORY=/app/logs
+      - LOG_FILE=/app/logs/app.log
+      - LLM_MODEL=gpt-3.5-turbo
+      - LLM_TEMPERATURE=0.7
+      - LLM_MAX_LENGTH=4096
     volumes:
       - ./uploads:/tmp/uploads
+      - ./logs:/app/logs
       - backend_data:/app/data
     ports:
       - "8081:3000"

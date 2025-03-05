@@ -9,6 +9,7 @@ export const usePdfManager = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [currentPdfId, setCurrentPdfId] = useState<string>('')
   const [storedPdfs, setStoredPdfs] = useState<string[]>([])
+  const [isDuplicate, setIsDuplicate] = useState(false)
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0]
@@ -21,6 +22,7 @@ export const usePdfManager = () => {
       setUploadProgress(0)
       setProgressMessage('')
       setError('')
+      setIsDuplicate(false)
     } else {
       setFile(null)
     }
@@ -43,6 +45,7 @@ export const usePdfManager = () => {
     setError('')
     setUploadProgress(0)
     setProgressMessage('')
+    setIsDuplicate(false)
 
     try {
       const result = await api.uploadPdfWithEmbeddings(file, (progress, message) => {
@@ -52,10 +55,21 @@ export const usePdfManager = () => {
       
       setCurrentPdfId(result.fileId)
       
+      // Check if this was a duplicate PDF
+      if (result.duplicate) {
+        setIsDuplicate(true)
+        setProgressMessage('PDF already exists in repository. Loaded from ChromaDB.')
+        setUploadProgress(100)
+      }
+      
       // Refresh the list of PDFs after successful upload
       await loadStoredPdfs()
       
-      return result.fileId
+      // Return the file ID and duplicate status
+      return {
+        fileId: result.fileId,
+        duplicate: result.duplicate || false
+      }
     } catch (error: unknown) {
       console.error('Error uploading PDF:', error)
       const errorMessage = error instanceof Error 
@@ -68,6 +82,14 @@ export const usePdfManager = () => {
     }
   }
 
+  const clearFile = () => {
+    setFile(null)
+    setUploadProgress(0)
+    setProgressMessage('')
+    setError('')
+    setIsDuplicate(false)
+  }
+
   return {
     file,
     uploadProgress,
@@ -76,10 +98,10 @@ export const usePdfManager = () => {
     isLoading,
     currentPdfId,
     storedPdfs,
+    isDuplicate,
     handleFileUpload,
     handleUpload,
     loadStoredPdfs,
-    setCurrentPdfId,
-    setError
+    clearFile
   }
 }

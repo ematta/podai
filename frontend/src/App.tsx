@@ -13,7 +13,10 @@ import ChatProvider from './context/ChatContext';
 import FileUpload from './components/FileUpload';
 import ChatWindow from './components/ChatWindow';
 
-// Create theme
+/**
+ * Application theme configuration
+ * Defines the color palette and other theme properties
+ */
 const theme = createTheme({
   palette: {
     primary: {
@@ -25,7 +28,12 @@ const theme = createTheme({
   },
 });
 
-// Header component
+/**
+ * Header component that displays the application title bar
+ * 
+ * @component
+ * @returns {JSX.Element} The header UI
+ */
 const Header = () => (
   <AppBar position="static">
     <Toolbar>
@@ -36,7 +44,13 @@ const Header = () => (
   </AppBar>
 );
 
-// Main App
+/**
+ * Main application component
+ * Contains the application layout and providers
+ * 
+ * @component
+ * @returns {JSX.Element} The complete application UI
+ */
 function App() {
   return (
     <ThemeProvider theme={theme}>

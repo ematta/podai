@@ -24,8 +24,9 @@ RUN pip install --no-cache-dir \
 # Copy the application code
 COPY src/ ./src/
 
-# Create upload directory with proper permissions
+# Create directories with proper permissions
 RUN mkdir -p /tmp/uploads && chmod 777 /tmp/uploads
+RUN mkdir -p /app/logs && chmod 777 /app/logs
 
 # Set environment variables
 ENV PYTHONPATH=/app
@@ -37,6 +38,11 @@ ENV UPLOAD_FOLDER=/tmp/uploads
 ENV CHROMA_HOST=chromadb
 ENV CHROMA_PORT=8000
 ENV CHROMA_PROTOCOL=http
+ENV LOG_DIRECTORY=/app/logs
+ENV LOG_FILE=/app/logs/app.log
+ENV LLM_MODEL=gpt-3.5-turbo
+ENV LLM_TEMPERATURE=0.7
+ENV LLM_MAX_LENGTH=4096
 
 # Expose the port
 EXPOSE 3000
