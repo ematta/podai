@@ -1,17 +1,28 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
-import { initDevMemoryProfiler } from './utils/memoryProfiler'
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import './index.css';
 
-// Initialize memory profiler in development mode
-if (import.meta.env.DEV || import.meta.env.VITE_ENABLE_PROFILING === 'true') {
-  initDevMemoryProfiler();
-  console.log('Memory profiler initialized in development mode');
+/**
+ * Main application entry point
+ * Mounts the React application to the DOM
+ * 
+ * Includes error handling to help debug mounting issues and
+ * displays user-friendly error messages if mounting fails
+ */
+try {
+  // Get root element
+  const rootElement = document.getElementById('root');
+  
+  if (!rootElement) {
+    console.error('Root element not found. Make sure there is a div with id "root" in index.html');
+    document.body.innerHTML = '<div style="color:red;padding:20px;">Error: Root element not found</div>';
+  } else {
+    // Create root and render
+    const root = createRoot(rootElement);
+    root.render(<App />);
+    console.log('React app mounted successfully');
+  }
+} catch (error) {
+  console.error('Error mounting React app:', error);
+  document.body.innerHTML = '<div style="color:red;padding:20px;">Error mounting React app</div>';
 }
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)

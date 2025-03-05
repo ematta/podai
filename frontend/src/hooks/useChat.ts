@@ -1,47 +1,57 @@
 import { useState } from 'react'
-import axios from 'axios'
-import { ChatMessage } from '../types/index'
+import { ChatMessage } from '../types'
+import { API_BASE_URL } from '../config'
 
-export const useChat = (pdfId: string) => {
+export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [question, setQuestion] = useState('')
-  const [isChatLoading, setIsChatLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSendMessage = async () => {
-    if (!question.trim() || !pdfId || isChatLoading) return
+  const addMessage = (content: string, type: 'user' | 'assistant' | 'system') => {
+    const message: ChatMessage = {
+      type,
+      content,
+      timestamp: new Date().toISOString()
+    }
+    setMessages(prev => [...prev, message])
+    return message
+  }
 
-    const userMessage: ChatMessage = { role: 'user', content: question }
-    setMessages(prev => [...prev, userMessage])
-    setQuestion('')
-    setIsChatLoading(true)
-
+  const sendMessage = async (content: string) => {
+    if (!content.trim()) return
+    
+    // Add user message
+    addMessage(content, 'user')
+    setIsLoading(true)
+    
     try {
-      const response = await axios.post(`http://localhost:8081/chat/${pdfId}`, {
-        question
+      // Send to backend
+      const response = await fetch(`${API_BASE_URL}/api/chat/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: content }),
       })
-
-      const assistantMessage: ChatMessage = {
-        role: 'assistant',
-        content: response.data.answer,
-        sources: response.data.sources
+      
+      const data = await response.json()
+      
+      if (response.ok) {
+        // Add response message
+        addMessage(data.response, 'assistant')
+      } else {
+        throw new Error(data.message || 'Failed to get response')
       }
-      setMessages(prev => [...prev, assistantMessage])
     } catch (error) {
-      console.error('Chat failed:', error)
-      setError('Failed to get response. Please try again.')
+      console.error('Error sending message:', error)
+      addMessage('Sorry, there was an error processing your request.', 'system')
     } finally {
-      setIsChatLoading(false)
+      setIsLoading(false)
     }
   }
 
   return {
     messages,
-    question,
-    isChatLoading,
-    error,
-    setQuestion,
-    handleSendMessage,
-    setMessages
+    sendMessage,
+    isLoading,
   }
 }

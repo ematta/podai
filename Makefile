@@ -179,3 +179,22 @@ k8s-forward-backend:
 k8s-forward-frontend:
 	@echo "Port forwarding frontend service to localhost:8080..."
 	kubectl port-forward svc/podai-frontend 8080:80
+
+# Build the test Docker image
+test-backend-docker-build:
+	docker build -t backend-tests -f node-backend/Dockerfile.test ./node-backend
+
+# Run the tests in Docker
+test-backend-docker: test-backend-docker-build
+	docker run --rm backend-tests
+
+# Run tests with file watching in Docker
+test-backend-docker-watch: test-backend-docker-build
+	docker run --rm backend-tests npm run test:watch
+
+# Clean up test containers and images
+test-backend-docker-clean:
+	docker rmi backend-tests || true
+
+# Add this to your existing test targets if you want to run both local and Docker tests
+test: test-backend test-backend-docker

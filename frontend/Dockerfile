@@ -1,30 +1,44 @@
-FROM node:20-alpine as builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Install dependencies needed for build
+RUN apt-get update && \
+    apt-get install -y python3 make g++ && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy package files first for better caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies with clean install
+RUN npm ci && \
+    npm install --no-save esbuild esbuild-sass-plugin sass && \
+    npm cache clean --force
 
-# Copy source code
+# Copy the rest of the code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build with esbuild directly - no fallback
+RUN NODE_OPTIONS="--max-old-space-size=8192" \
+    API_URL="http://localhost:8081" \
+    node esbuild.config.js
 
-# Production stage with Nginx
+# Use nginx for serving the app
 FROM nginx:alpine
 
-# Copy built assets from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Copy built app
+COPY --from=builder /app/dist /usr/share/nginx/html/
 
 # Copy nginx configuration
-COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx-entrypoint.sh /
 
-# Expose port
-EXPOSE 80
+# Make the entrypoint script executable
+RUN chmod +x /nginx-entrypoint.sh
 
-# Start Nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Set environment variables
+ENV API_URL=http://localhost:8081
+
+# Start nginx
+ENTRYPOINT ["/nginx-entrypoint.sh"]

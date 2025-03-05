@@ -1,7 +1,10 @@
 import { PDFList } from '../types/index';
 
 // Backend server URL
-const API_BASE_URL = 'http://localhost:8081';
+// Use environment-aware base URL: service name in Docker, localhost in development
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8081'  // Development environment
+  : 'http://backend:3000';    // Docker environment
 
 export const convertPdfToMarkdown = async (file: File) => {
   const formData = new FormData();
@@ -24,15 +27,15 @@ export const convertPdfToMarkdown = async (file: File) => {
   return response.json();
 };
 
-export async function uploadPdfWithEmbeddings(
+export const uploadPdfWithEmbeddings = async (
   file: File, 
   onProgressUpdate?: (progress: number, message: string) => void
-): Promise<{ fileId: string; progressId: string }> {
+): Promise<{ fileId: string; duplicate?: boolean }> => {
   try {
     const formData = new FormData();
-    formData.append('pdf', file);
+    formData.append('file', file);
     
-    const response = await fetch(`${API_BASE_URL}/api/store-pdf`, {
+    const response = await fetch(`${API_BASE_URL}/api/pdf/upload`, {
       method: 'POST',
       body: formData,
       mode: 'cors',
@@ -48,14 +51,28 @@ export async function uploadPdfWithEmbeddings(
     
     const data = await response.json();
     
-    // Start polling for progress
-    if (onProgressUpdate && data.progressId) {
-      pollProgress(data.progressId, onProgressUpdate);
+    // Check if this is a duplicate PDF before starting progress polling
+    if (data.duplicate) {
+      // For duplicate PDFs, we skip processing and return the existing fileId
+      if (onProgressUpdate) {
+        // Notify that the PDF was found and loaded from ChromaDB
+        onProgressUpdate(100, 'PDF already exists in repository. Loaded from ChromaDB.');
+      }
+      
+      return {
+        fileId: data.fileId,
+        duplicate: true
+      };
+    }
+    
+    // For new PDFs, start polling for progress if we have a fileId
+    if (onProgressUpdate && data.fileId) {
+      pollProgress(data.fileId, onProgressUpdate);
     }
     
     return {
       fileId: data.fileId,
-      progressId: data.progressId
+      duplicate: false
     };
   } catch (error: unknown) {
     console.error('Error uploading PDF:', error);
@@ -64,14 +81,38 @@ export async function uploadPdfWithEmbeddings(
       : 'Failed to upload PDF';
     throw new Error(errorMessage);
   }
-}
+};
+
+const pollProgress = async (
+  fileId: string,
+  onProgressUpdate: (progress: number, message: string) => void
+) => {
+  const pollInterval = setInterval(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/pdf/progress/${fileId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch progress');
+      }
+      
+      const data = await response.json();
+      onProgressUpdate(data.progress, data.status);
+      
+      if (data.progress === 100 || data.status === 'completed') {
+        clearInterval(pollInterval);
+      }
+    } catch (error) {
+      console.error('Error polling progress:', error);
+      clearInterval(pollInterval);
+    }
+  }, 1000);
+};
 
 export const getRagChatResponse = async (
   question: string,
   fileId: string
 ): Promise<string> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/chat-rag`, {
+    const response = await fetch(`${API_BASE_URL}/api/chat/rag`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -98,20 +139,20 @@ export const getRagChatResponse = async (
       : 'Failed to get chat response';
     throw new Error(errorMessage);
   }
-}
+};
 
 export const getRagChatStreamingResponse = async (
   question: string,
   fileId: string,
   onChunk: (chunk: string) => void,
-  onComplete: () => void,
-  onError: (error: Error) => void
+  onComplete: () => void
 ): Promise<void> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/chat-rag-stream`, {
+    const response = await fetch(`${API_BASE_URL}/api/chat/rag/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'text/event-stream'
       },
       mode: 'cors',
       credentials: 'include',
@@ -120,129 +161,37 @@ export const getRagChatStreamingResponse = async (
         fileId,
       }),
     });
-    
+
     if (!response.ok) {
-      throw new Error(`Failed to get chat response: ${response.statusText}`);
+      throw new Error(`Failed to get streaming response: ${response.statusText}`);
     }
-    
-    if (!response.body) {
-      throw new Error('Response body is null');
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Failed to initialize stream reader');
     }
-    
-    // Get a reader from the response body stream
-    const reader = response.body.getReader();
+
     const decoder = new TextDecoder();
-    
-    // Process the stream chunks
-    const processStream = async () => {
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          
-          // If the stream is done, call the onComplete callback
-          if (done) {
-            onComplete();
-            break;
-          }
-          
-          // Decode the chunk and send it to the callback
-          const chunk = decoder.decode(value);
-          onChunk(chunk);
-        }
-      } catch (error: unknown) {
-        console.error('Error processing stream:', error);
-        const errorMessage = error instanceof Error 
-          ? error.message 
-          : 'Failed to process stream';
-        onError(new Error(errorMessage));
+
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) {
+        onComplete();
+        break;
       }
-    };
-    
-    // Start processing the stream
-    processStream();
-    
+
+      const chunk = decoder.decode(value);
+      onChunk(chunk);
+    }
   } catch (error: unknown) {
-    console.error('Error getting streaming chat response:', error);
+    console.error('Error getting streaming response:', error);
     const errorMessage = error instanceof Error 
       ? error.message 
-      : 'Failed to get streaming chat response';
-    onError(new Error(errorMessage));
+      : 'Failed to get streaming response';
+    throw new Error(errorMessage);
   }
 };
-
-export async function pollProgress(
-  progressId: string, 
-  onProgressUpdate?: (progress: number, message: string) => void
-): Promise<boolean> {
-  let retries = 0;
-  const maxRetries = 100; // More retries for longer processing
-  
-  return new Promise((resolve, reject) => {
-    const poll = async (): Promise<boolean> => {
-      // Check if we've exceeded the timeout
-      if (retries >= maxRetries) {
-        console.warn('Max polling retries reached');
-        resolve(true); // Resolve anyway to prevent hanging
-        return true;
-      }
-      
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/progress/${progressId}`, {
-          mode: 'cors',
-          credentials: 'include',
-          headers: {
-            'Accept': 'application/json',
-          }
-        });
-        
-        if (!response.ok) {
-          if (response.status === 404) {
-            console.log('Progress not found, proceeding anyway');
-            resolve(true);
-            return true;
-          }
-          throw new Error(`Failed to get progress: ${response.statusText}`);
-        }
-        
-        const progressData = await response.json();
-        
-        console.log('Progress update:', progressData);
-        
-        if (onProgressUpdate) {
-          onProgressUpdate(progressData.progress, progressData.message);
-        }
-        
-        if (progressData.status === 'completed' || progressData.progress === 100) {
-          console.log('Process completed successfully! Ready for chat.');
-          resolve(true);
-          return true;
-        }
-        
-        if (progressData.status === 'error') {
-          console.error('Process failed:', progressData.message);
-          reject(new Error(progressData.message || 'Process failed'));
-          return false;
-        }
-        
-        retries++;
-        // Adaptive polling - slower as time progresses
-        const delay = Math.min(1000 + (retries * 100), 3000);
-        setTimeout(() => poll(), delay);
-        return false;
-      } catch (error: unknown) {
-        console.error('Error polling progress:', error);
-        const errorMessage = error instanceof Error 
-          ? error.message 
-          : 'Failed to poll progress';
-        reject(new Error(errorMessage));
-        return false;
-      }
-    };
-    
-    // Start polling
-    poll();
-  });
-}
 
 const getStoredPdfs = async (): Promise<string[]> => {
   const response = await fetch(`${API_BASE_URL}/pdfs`, {

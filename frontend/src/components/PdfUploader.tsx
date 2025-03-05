@@ -1,12 +1,106 @@
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
 
-type Props = {
+/**
+ * Props for the PdfUploader component
+ * @interface Props
+ * @property {File | null} selectedFile - Currently selected PDF file, if any
+ * @property {boolean} isLoading - Whether a file is currently being processed
+ * @property {function} onFileChange - Handler for file input changes
+ * @property {function} onUpload - Handler for upload button click
+ */
+interface Props {
   selectedFile: File | null
   isLoading: boolean
   onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void
   onUpload: () => void
 }
 
+/**
+ * Props for the FileInfo component
+ * @interface FileInfoProps
+ * @property {File} file - The file to display information about
+ */
+interface FileInfoProps {
+  file: File
+}
+
+/**
+ * Props for the UploadControls component
+ * @interface UploadControlsProps
+ * @property {boolean} isLoading - Whether a file is currently being processed
+ * @property {boolean} hasFile - Whether a file is currently selected
+ * @property {React.RefObject<HTMLInputElement>} fileInputRef - Reference to the file input
+ * @property {function} onClear - Handler for clear button click
+ */
+interface UploadControlsProps {
+  isLoading: boolean
+  hasFile: boolean
+  fileInputRef: React.RefObject<HTMLInputElement>
+  onClear: () => void
+}
+
+/**
+ * Displays information about the selected PDF file
+ * @component
+ * @param {FileInfoProps} props - Component props
+ * @returns {JSX.Element} File information display
+ */
+const FileInfo: React.FC<FileInfoProps> = ({ file }) => {
+  const fileSizeMB = (file.size / 1024 / 1024).toFixed(2)
+  
+  return (
+    <div className="file-info" data-testid="selected-file-info">
+      <span className="file-label" data-testid="selected-file-label">Selected PDF: </span>
+      <span className="file-name" data-testid="selected-file-name">{file.name}</span>
+      <span className="file-size" data-testid="selected-file-size">({fileSizeMB} MB)</span>
+    </div>
+  )
+}
+
+/**
+ * Displays the PDF selection and clear buttons
+ * @component
+ * @param {UploadControlsProps} props - Component props
+ * @returns {JSX.Element} Upload control buttons
+ */
+const UploadControls: React.FC<UploadControlsProps> = ({ 
+  isLoading, 
+  hasFile, 
+  fileInputRef, 
+  onClear 
+}) => {
+  return (
+    <div className="upload-controls">
+      <button 
+        onClick={() => fileInputRef.current?.click()} 
+        className="upload-button"
+        disabled={isLoading}
+        data-testid="select-file-button"
+      >
+        Select PDF
+      </button>
+      
+      <button 
+        onClick={onClear} 
+        className="clear-button"
+        disabled={isLoading || !hasFile}
+        data-testid="clear-file-button"
+      >
+        Clear
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Component for uploading and processing PDF files
+ * Allows users to select a PDF, displays information about the selected file,
+ * and provides a button to upload the file for processing
+ * 
+ * @component
+ * @param {Props} props - Component props
+ * @returns {JSX.Element} PDF uploader interface
+ */
 const PdfUploader: React.FC<Props> = ({
   selectedFile,
   isLoading,
@@ -14,14 +108,30 @@ const PdfUploader: React.FC<Props> = ({
   onUpload
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [notification, setNotification] = useState<{message: string; type: 'info' | 'success'} | null>(null);
 
+  /**
+   * Triggers a click on the hidden file input
+   */
+  const handleSelectFile = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  /**
+   * Handles clearing the selected file
+   * Creates a mock change event to reset the file selection
+   */
   const handleClear = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     
+    // Clear any notification
+    setNotification(null);
+    
     // Create a partial mock event with just the necessary properties
-    // This is a pragmatic approach that avoids using 'any' while focusing on what's actually needed
     const mockEvent = {
       target: {
         files: null,
@@ -34,15 +144,37 @@ const PdfUploader: React.FC<Props> = ({
     onFileChange(mockEvent);
   };
 
+  /**
+   * Handles the PDF upload with duplicate checking
+   * Checks if the PDF already exists in the repository before processing
+   */
+  const handleUploadWithDuplicateCheck = async () => {
+    if (!selectedFile) return;
+    
+    // Clear any previous notification
+    setNotification(null);
+    
+    // Call the onUpload function which will handle the duplicate check
+    // The backend will check if the PDF already exists using MD5 hash
+    onUpload();
+    
+    // Note: The actual notification will be set by the parent component 
+    // after it receives the response from the backend
+    // This is just a pass-through to the parent's onUpload handler
+  };
+
   return (
     <div className="upload-section" data-testid="pdf-uploader">
-      <h2>Upload PDF for Podcast Script Generation</h2>
+      <h2>Upload PDF for Chat Analysis</h2>
       
       <input
         type="file"
         id="file-upload"
         accept=".pdf"
-        onChange={onFileChange}
+        onChange={(e) => {
+          setNotification(null); // Clear notification on new file selection
+          onFileChange(e);
+        }}
         style={{ display: 'none' }}
         disabled={isLoading}
         ref={fileInputRef}
@@ -51,7 +183,7 @@ const PdfUploader: React.FC<Props> = ({
       
       <div className="upload-controls">
         <button 
-          onClick={() => fileInputRef.current?.click()} 
+          onClick={handleSelectFile} 
           className="upload-button"
           disabled={isLoading}
           data-testid="select-file-button"
@@ -69,21 +201,24 @@ const PdfUploader: React.FC<Props> = ({
         </button>
       </div>
       
-      {selectedFile && (
-        <div className="file-info" data-testid="selected-file-info">
-          <span className="file-label" data-testid="selected-file-name">Selected PDF: </span>
-          <span className="file-name" data-testid="selected-file-name">{selectedFile.name}</span>
-          <span className="file-size" data-testid="selected-file-size">({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+      {selectedFile && <FileInfo file={selectedFile} />}
+      
+      {notification && (
+        <div 
+          className={`notification ${notification.type}`}
+          data-testid="pdf-notification"
+        >
+          {notification.message}
         </div>
       )}
       
       {selectedFile && !isLoading && (
         <button 
-          onClick={onUpload} 
+          onClick={handleUploadWithDuplicateCheck} 
           className="convert-button"
           data-testid="upload-button"
         >
-          Convert to Podcast Script
+          Process PDF for Chat
         </button>
       )}
       
@@ -149,7 +284,6 @@ const PdfUploader: React.FC<Props> = ({
         .file-name {
           color: #2196f3;
           margin-right: 5px;
-          word-break: break-all;
         }
         
         .convert-button {
@@ -158,16 +292,41 @@ const PdfUploader: React.FC<Props> = ({
           border: none;
           padding: 12px 20px;
           border-radius: 4px;
-          cursor: pointer;
           font-weight: bold;
-          width: 100%;
-          font-size: 16px;
           margin-top: 10px;
+          cursor: pointer;
         }
         
-        button:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
+        .convert-button:hover {
+          background-color: #43a047;
+        }
+        
+        .loading-indicator {
+          background-color: #fff3cd;
+          border: 1px solid #ffeeba;
+          color: #856404;
+          padding: 10px 15px;
+          border-radius: 4px;
+          margin-top: 15px;
+          text-align: center;
+        }
+        
+        .notification {
+          padding: 10px 15px;
+          border-radius: 4px;
+          margin: 10px 0;
+        }
+        
+        .notification.info {
+          background-color: #e3f2fd;
+          border: 1px solid #bbdefb;
+          color: #0d47a1;
+        }
+        
+        .notification.success {
+          background-color: #e8f5e9;
+          border: 1px solid #c8e6c9;
+          color: #1b5e20;
         }
       `}</style> */}
     </div>

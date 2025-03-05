@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install Backend Dependencies
+      working-directory: ./node-backend
+      run: npm ci
+
+    - name: Install Frontend Dependencies
+      working-directory: ./frontend
+      run: npm ci --legacy-peer-deps
+
+    - name: Run Backend Tests
+      working-directory: ./node-backend
+      run: npm test
+
+    - name: Run Frontend Tests
+      working-directory: ./frontend
+      run: npm test
+
+    - name: Build Backend
+      working-directory: ./node-backend
+      run: npm run build
+
+    - name: Build Frontend
+      working-directory: ./frontend
+      run: npm run build
+
+    - name: Run E2E Tests
+      working-directory: ./frontend
+      run: |
+        npx playwright install --with-deps chromium
+        npm run test:e2e 

@@ -1,0 +1,44 @@
+# ChromaDB Server Configuration
+server:
+  host: 0.0.0.0
+  port: 8000
+  cors:
+    enabled: true
+    allow_origins:
+      - "http://localhost:5173"
+      - "http://localhost:8080"
+      - "http://localhost:8081"
+      - "http://localhost:3000"
+      - "http://127.0.0.1:5173"
+      - "http://127.0.0.1:8080"
+      - "http://frontend"
+      - "http://podai-frontend"
+      - "http://frontend:80"
+      - "http://podai-frontend:80"
+      - "http://backend"
+      - "http://podai-backend"
+      - "http://backend:3000"
+      - "http://podai-backend:3000"
+    allow_methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    allow_headers:
+      - "*"
+    allow_credentials: true
+
+# API Configuration
+chroma_api:
+  impl: rest
+
+# Storage Settings
+persist_directory: /chroma/data
+
+# System Settings
+allow_reset: true
+anonymized_telemetry: false
+
+# Maximum size for uploads
+max_payload_size_bytes: 41943040

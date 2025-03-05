@@ -1,0 +1,44 @@
+// Main SCSS file - imports all modular style files
+
+// Import base styles (variables, mixins, reset)
+@use './base' as *;
+
+// Import component styles
+@use './components' as *;
+
+// You can add more modular imports here as your application grows:
+// @import './layouts.scss';
+// @import './pages.scss';
+// @import './themes.scss';
+// @import './animations.scss';
+
+// Base styles
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+// Basic utility classes
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+// Theme colors
+:root {
+  --primary-color: #1976d2;
+  --secondary-color: #f5f5f5;
+  --text-color: rgba(0, 0, 0, 0.87);
+  --border-color: #e0e0e0;
+}

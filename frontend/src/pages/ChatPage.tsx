@@ -1,306 +1,247 @@
-import { useState, useRef, KeyboardEvent } from 'react';
-import { Box, Button, Container, Typography, Paper, Input, Switch, FormControlLabel } from '@mui/material';
-import PdfUploader from '../components/PdfUploader';
-import ChatWindow from '../components/ChatWindow';
-import ProgressBar from '../components/ProgressBar';
-import TestUtils from '../components/TestUtils';
-import * as api from '../services/api';
-import { ChatMessage } from '../types/index';
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Box, 
+  TextField, 
+  Button, 
+  Typography, 
+  Paper, 
+  Container,
+  CircularProgress
+} from '@mui/material';
+import { ChatMessage } from '../types';
+import { API_BASE_URL } from '../config';
 
-const ChatPage = () => {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+const ChatPage: React.FC = () => {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [fileId, setFileId] = useState<string | null>(null);
-  const [pdfId, setPdfId] = useState<string | null>(null);
-  const [progress, setProgress] = useState<number>(0);
-  const [progressMessage, setProgressMessage] = useState<string | null>(null);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState<string>('');
-  const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
-  const [useStreaming, setUseStreaming] = useState<boolean>(true);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files ? event.target.files[0] : null;
-    setSelectedFile(file);
-    setPdfId(null);
-    setFileId(null);
-    setError(null);
-    setChatMessages([]);
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      setError('Please select a PDF file first');
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      setError(null);
-      setProgress(0);
-      setChatMessages([]);
-      
-      const { fileId } = await api.uploadPdfWithEmbeddings(selectedFile, (progress, message) => {
-        setProgress(progress);
-        setProgressMessage(message);
-      });
-      
-      setFileId(fileId);
-      
-    } catch (err: unknown) {
-      console.error('Error uploading PDF:', err);
-      const errorMessage = err instanceof Error 
-        ? err.message 
-        : 'Failed to upload PDF';
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [progress, setProgress] = useState(0);
   
-  const handleTestPdfSelect = async (pdfPath: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      setProgress(0);
-      setProgressMessage('Processing test PDF...');
-      setChatMessages([]);
-      
-      const { fileId } = await api.loadTestPdf(pdfPath, (progress, message) => {
-        setProgress(progress);
-        setProgressMessage(message);
-      });
-      
-      setFileId(fileId);
-      
-    } catch (err: unknown) {
-      console.error('Error loading test PDF:', err);
-      const errorMessage = err instanceof Error 
-        ? err.message 
-        : 'Failed to load test PDF';
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleChatSubmit = async () => {
-    if (!chatInput.trim() || !fileId || isChatLoading) return;
-    
-    const userMessage: ChatMessage = {
-      role: 'user',
-      content: chatInput
+  // Listen for PDF uploaded events
+  useEffect(() => {
+    const handlePdfUpload = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.fileId) {
+        setFileId(customEvent.detail.fileId);
+        
+        // Add system message
+        const systemMessage: ChatMessage = {
+          type: 'system',
+          content: 'PDF has been uploaded and processed. You can now ask questions about it.',
+          timestamp: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, systemMessage]);
+      }
     };
-    
-    setChatMessages(prev => [...prev, userMessage]);
-    setIsChatLoading(true);
-    setChatInput('');
-    
+
+    window.addEventListener('pdfUploaded', handlePdfUpload);
+    return () => {
+      window.removeEventListener('pdfUploaded', handlePdfUpload);
+    };
+  }, []);
+
+  // Scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+
+    const userMessage: ChatMessage = {
+      type: 'user',
+      content: input,
+      timestamp: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+
     try {
-      // Add a placeholder message for the assistant that will be updated
-      setChatMessages(prev => [...prev, {
-        role: 'assistant',
-        content: useStreaming ? '' : '...'
-      }]);
-      
-      if (useStreaming) {
-        // Use streaming API for word-by-word display
-        api.getRagChatStreamingResponse(
-          chatInput, 
-          fileId,
-          // Handle each new chunk
-          (chunk) => {
-            setChatMessages(prev => {
-              const newMessages = [...prev];
-              // Append the new chunk to the current content
-              newMessages[newMessages.length - 1] = {
-                role: 'assistant',
-                content: (newMessages[newMessages.length - 1].content || '') + chunk
-              };
-              return newMessages;
-            });
+      // Use RAG endpoint if fileId is available
+      if (fileId) {
+        const response = await fetch(`${API_BASE_URL}/api/chat/rag/stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-          // Handle completion
-          () => {
-            setIsChatLoading(false);
-            // Focus the chat input after sending
-            if (inputRef.current) {
-              inputRef.current.focus();
-            }
-          },
-          // Handle errors
-          (err) => {
-            console.error('Error getting streaming chat response:', err);
-            setChatMessages(prev => {
-              const newMessages = [...prev];
-              // Replace the last message with error message
-              newMessages[newMessages.length - 1] = {
-                role: 'system',
-                content: `Error: ${err.message || 'Failed to get a streaming response'}`
-              };
-              return newMessages;
-            });
-            setIsChatLoading(false);
-          }
-        );
-      } else {
-        // Use the regular API
-        const response = await api.getRagChatResponse(chatInput, fileId);
-        
-        // Replace the placeholder with the actual response
-        setChatMessages(prev => {
-          const newMessages = [...prev];
-          newMessages[newMessages.length - 1] = {
-            role: 'assistant',
-            content: response
-          };
-          return newMessages;
+          body: JSON.stringify({
+            question: input,
+            fileId: fileId,
+          }),
         });
+
+        if (!response.ok) {
+          throw new Error('Failed to get response from the server');
+        }
+
+        // Create placeholder for assistant message
+        const assistantMessage: ChatMessage = {
+          type: 'assistant',
+          content: '',
+          timestamp: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+
+        // Handle streaming response
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('Response body is not readable');
+        }
+
+        const decoder = new TextDecoder();
+        let done = false;
         
-        setIsChatLoading(false);
-        
-        // Focus the chat input after sending
-        if (inputRef.current) {
-          inputRef.current.focus();
+        while (!done) {
+          const { value, done: doneReading } = await reader.read();
+          done = doneReading;
+          
+          if (done) break;
+          
+          const text = decoder.decode(value);
+          
+          // Update assistant message with streamed content
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastIndex = updated.length - 1;
+            if (lastIndex >= 0 && updated[lastIndex].type === 'assistant') {
+              updated[lastIndex] = {
+                ...updated[lastIndex],
+                content: updated[lastIndex].content + text,
+              };
+            }
+            return updated;
+          });
+        }
+      } else {
+        // Regular chat endpoint for non-PDF related questions
+        const response = await fetch(`${API_BASE_URL}/api/chat/send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: input }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          const assistantMessage: ChatMessage = {
+            type: 'assistant',
+            content: data.response,
+            timestamp: new Date().toISOString()
+          };
+          setMessages(prev => [...prev, assistantMessage]);
+        } else {
+          throw new Error(data.message || 'Failed to get response');
         }
       }
-    } catch (err: unknown) {
-      console.error('Error getting chat response:', err);
-      const errorMessage = err instanceof Error 
-        ? err.message 
-        : 'Failed to get a response';
-      setChatMessages(prev => [...prev, {
-        role: 'system',
-        content: `Error: ${errorMessage}`
-      }]);
-      setIsChatLoading(false);
+    } catch (error) {
+      console.error('Error in chat:', error);
       
-      // Focus the chat input after sending
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    }
-  };
-
-  const handleInputKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleChatSubmit();
+      // Add error message
+      const errorMessage: ChatMessage = {
+        type: 'system',
+        content: 'Sorry, there was an error processing your request.',
+        timestamp: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h4" gutterBottom data-testid="page-title">
-        PDF Chat Assistant
-      </Typography>
-      
-      <Paper elevation={3} sx={{ p: 3, mb: 3 }} data-testid="upload-section">
-        <Typography variant="h6" gutterBottom data-testid="upload-title">
-          Upload a PDF file
-        </Typography>
-        
-        <Box sx={{ mb: 2 }}>
-          <PdfUploader
-            selectedFile={selectedFile}
-            isLoading={isLoading}
-            onFileChange={handleFileChange}
-            onUpload={handleUpload}
-          />
-          
-          {/* Test utilities for easy testing */}
-          <TestUtils onTestPdfSelect={handleTestPdfSelect} />
-        </Box>
-        
-        {isLoading && (
-          <Paper elevation={2} sx={{ mt: 2, p: 2 }} data-testid="processing-panel">
-            <Typography variant="h6" sx={{ mb: 1 }} data-testid="processing-title">Processing PDF</Typography>
-            <ProgressBar progress={progress} label={progressMessage || 'Processing...'} />
-          </Paper>
-        )}
-        
-        {(pdfId || fileId) && !isLoading && (
-          <Paper elevation={2} sx={{ mt: 2, p: 2, bgcolor: '#e8f5e9' }} data-testid="success-panel">
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Box 
-                sx={{ 
-                  color: 'success.main', 
-                  mr: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  fontSize: '1.5rem'
-                }}
-              >
-                ✅
-              </Box>
-              <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'success.dark' }} data-testid="success-message">
-                PDF is processed and ready for chat!
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          height: 'calc(100vh - 150px)', 
+          display: 'flex', 
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}
+      >
+        {/* Messages area */}
+        <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
+          {messages.length === 0 ? (
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              height: '100%' 
+            }}>
+              <Typography variant="h6" gutterBottom>
+                Welcome to PDF Chat Assistant
+              </Typography>
+              <Typography variant="body1">
+                Upload a PDF document to get started
               </Typography>
             </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }} data-testid="success-details">
-              You can now ask questions about this document using the chat interface below.
-            </Typography>
-          </Paper>
-        )}
+          ) : (
+            messages.map((msg, index) => (
+              <Box
+                key={index}
+                sx={{
+                  display: 'flex',
+                  justifyContent: msg.type === 'user' ? 'flex-end' : 'flex-start',
+                  mb: 2,
+                }}
+              >
+                <Paper
+                  elevation={1}
+                  sx={{
+                    p: 2,
+                    maxWidth: '70%',
+                    backgroundColor: 
+                      msg.type === 'system' 
+                        ? '#fff3e0' 
+                        : msg.type === 'user' 
+                          ? '#e3f2fd' 
+                          : '#f1f8e9',
+                    borderRadius: 2,
+                  }}
+                >
+                  <Typography variant="body1">{msg.content}</Typography>
+                </Paper>
+              </Box>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </Box>
         
-        {error && (
-          <Box sx={{ mt: 2, color: 'error.main' }} data-testid="error-message">
-            <Typography variant="body1">{error}</Typography>
-          </Box>
-        )}
+        {/* Input area */}
+        <Box sx={{ p: 2, borderTop: '1px solid #e0e0e0' }}>
+          <form onSubmit={handleSendMessage}>
+            <Box sx={{ display: 'flex' }}>
+              <TextField
+                fullWidth
+                variant="outlined"
+                placeholder="Type your message here..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                sx={{ mr: 1 }}
+                // Always enabled
+                disabled={false}
+              />
+              <Button 
+                variant="contained" 
+                color="primary" 
+                type="submit"
+                disabled={false}
+                sx={{ minWidth: '100px' }}
+              >
+                {isLoading ? <CircularProgress size={24} /> : 'Send'}
+              </Button>
+            </Box>
+          </form>
+        </Box>
       </Paper>
-      
-      {(pdfId || fileId) && (
-        <Paper elevation={3} sx={{ p: 3 }} data-testid="chat-section">
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" gutterBottom data-testid="chat-title" sx={{ mb: 0 }}>
-              Chat with your PDF
-            </Typography>
-            
-            <FormControlLabel
-              control={
-                <Switch 
-                  checked={useStreaming}
-                  onChange={(e) => setUseStreaming(e.target.checked)}
-                  color="primary"
-                />
-              }
-              label="Stream responses"
-            />
-          </Box>
-          
-          <ChatWindow 
-            messages={chatMessages} 
-            isLoading={isChatLoading} 
-            progress={progress}
-          />
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }} data-testid="chat-input-container">
-            <Input 
-              fullWidth
-              type="text"
-              placeholder="Ask a question about the document..."
-              disabled={isLoading || isChatLoading}
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyPress={handleInputKeyPress}
-              inputRef={inputRef}
-              data-testid="chat-input"
-            />
-            <Button 
-              variant="contained" 
-              color="primary"
-              disabled={isLoading || isChatLoading || !chatInput.trim()}
-              onClick={handleChatSubmit}
-              data-testid="chat-send-button"
-            >
-              {isChatLoading ? 'Sending...' : 'Send'}
-            </Button>
-          </Box>
-        </Paper>
-      )}
     </Container>
   );
 };

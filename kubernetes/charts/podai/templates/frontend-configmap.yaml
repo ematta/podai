@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.frontend.name }}-nginx-config
+  labels:
+    app: {{ .Values.frontend.name }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    release: {{ .Release.Name }}
+data:
+  nginx.conf: |
+    server {
+        listen 80;
+        server_name localhost;
+        
+        # More extensive logging for debugging
+        error_log /var/log/nginx/error.log debug;
+        access_log /var/log/nginx/access.log;
+
+        # React app
+        location / {
+            root /usr/share/nginx/html;
+            index index.html;
+            # This is important for SPA client-side routing
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Static files
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+            root /usr/share/nginx/html;
+            expires 30d;
+            add_header Cache-Control "public, no-transform";
+        }
+
+        # Proxy API requests to backend
+        location /api/ {
+            proxy_pass {{ .Values.backend.service.url }};
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+        }
+
+        # Enable gzip compression for faster loading
+        gzip on;
+        gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+        gzip_comp_level 6;
+        gzip_min_length 1000;
+
+        # Security headers
+        add_header X-Content-Type-Options "nosniff";
+        add_header X-Frame-Options "SAMEORIGIN";
+        add_header X-XSS-Protection "1; mode=block";
+    } 

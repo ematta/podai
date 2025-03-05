@@ -1,134 +1,132 @@
-import React, { useEffect, useRef } from 'react';
-import { Box, CircularProgress, Typography } from '@mui/material';
-import { ChatMessage } from '../types/index';
+import React, { useEffect, useRef, useState } from 'react';
+import { Box, CircularProgress, Typography, TextField, Button } from '@mui/material';
+import MessageBubble from './MessageBubble';
+import { useChat } from '../context/ChatContext';
 
-interface ChatWindowProps {
-  messages: ChatMessage[];
-  isLoading: boolean;
-  progress: number;
-}
+/**
+ * ChatWindow component that displays the chat interface with messages and input field
+ * @component
+ * @returns {JSX.Element} The chat window UI
+ */
+const ChatWindow: React.FC = () => {
+  // Get state and functions from ChatContext
+  const { 
+    messages, 
+    sendMessage, 
+    isLoading, 
+    currentFileId 
+  } = useChat();
+  
+  const [inputValue, setInputValue] = useState<string>('');
+  const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ 
-  messages, 
-  isLoading,
-  progress
-}) => {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Scroll to bottom whenever messages change
+  /**
+   * Effect hook to scroll to the bottom of the chat window when messages change
+   */
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  /**
+   * Handles form submission to send a new message
+   * @param {React.FormEvent} e - The form submission event
+   */
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputValue.trim()) return;
+
+    const message = inputValue;
+    setInputValue('');
+    await sendMessage(message, currentFileId);
+  };
+
   return (
-    <Box sx={{ 
-      minHeight: '300px',
-      maxHeight: '500px',
-      overflowY: 'auto',
-      p: 2,
-      bgcolor: '#f9f9f9',
-      borderRadius: 1,
-      mb: 2
-    }}>
-      {messages.length === 0 ? (
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          height: '100%',
-          color: 'text.secondary'
-        }}>
-          <Typography variant="body1">
-            No messages yet. Ask a question about your PDF.
-          </Typography>
-        </Box>
-      ) : (
-        messages.map((message, index) => (
-          <Box 
-            key={index} 
-            sx={{ 
-              display: 'flex',
-              flexDirection: 'column',
-              mb: 2,
-              maxWidth: '80%',
-              alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
-              ml: message.role === 'user' ? 'auto' : 0
-            }}
-          >
-            <Box 
-              sx={{
-                bgcolor: message.role === 'user' 
-                  ? '#e3f2fd' 
-                  : message.role === 'system' 
-                    ? '#fff3e0' 
-                    : '#e8f5e9',
-                borderRadius: 2,
-                p: 2,
-                boxShadow: 1
+    <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Messages container */}
+      <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
+        {messages.length === 0 ? (
+          <WelcomeMessage hasPdf={currentFileId !== null} />
+        ) : (
+          messages.map((message, index) => (
+            <MessageBubble key={index} message={message} />
+          ))
+        )}
+        <div ref={messagesEndRef} />
+      </Box>
+
+      {/* Input container */}
+      <Box sx={{ p: 2, backgroundColor: 'background.default' }}>
+        <form onSubmit={handleSubmit}>
+          <Box sx={{ display: 'flex' }}>
+            <TextField
+              fullWidth
+              variant="outlined"
+              placeholder="Type your message here..."
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              inputProps={{
+                style: { 
+                  opacity: 1,
+                  color: 'inherit'
+                }
               }}
-              className={`chat-message chat-message-${message.role}`}
+            />
+            <Button 
+              variant="contained" 
+              color="primary" 
+              type="submit"
             >
-              <Typography 
-                variant="caption" 
-                sx={{ 
-                  color: 'text.secondary',
-                  mb: 0.5,
-                  display: 'block',
-                  fontWeight: 'bold'
-                }}
-                className="chat-message-role"
-              >
-                {message.role === 'user' 
-                  ? 'You' 
-                  : message.role === 'system' 
-                    ? 'System' 
-                    : 'Assistant'}
-              </Typography>
-              
-              <Typography 
-                variant="body1" 
-                sx={{ 
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word'
-                }}
-                className="chat-message-content"
-                data-testid="chat-message-content"
-              >
-                {message.content}
-              </Typography>
-              
-              {message.sources && (
-                <Box sx={{ mt: 1, fontSize: '0.85rem', color: 'text.secondary' }}>
-                  <Typography variant="caption" sx={{ fontStyle: 'italic' }}>
-                    Sources: {message.sources.join(', ')}
-                  </Typography>
-                </Box>
-              )}
-            </Box>
+              {isLoading ? <CircularProgress size={24} /> : "Send"}
+            </Button>
           </Box>
-        ))
-      )}
-      
-      {isLoading && (
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center',
-          mb: 2
-        }}>
-          <CircularProgress size={20} sx={{ mr: 1 }} />
-          <Typography variant="body2">
-            {progress > 0 
-              ? `Processing... ${Math.round(progress)}%` 
-              : 'Thinking...'}
-          </Typography>
-        </Box>
-      )}
-      
-      <div ref={messagesEndRef} />
+        </form>
+      </Box>
     </Box>
   );
 };
+
+/**
+ * Displays a welcome message when no chat messages are present
+ * @returns {JSX.Element} The welcome message UI
+ */
+const WelcomeMessage: React.FC<{ hasPdf: boolean }> = ({ hasPdf }) => (
+  <Box sx={{ 
+    display: 'flex', 
+    flexDirection: 'column', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    height: '100%', 
+    textAlign: 'center' 
+  }}>
+    <Typography variant="h5" gutterBottom>
+      Welcome to PDF Chat Assistant.
+    </Typography>
+    {hasPdf ? (
+      <>
+        <Typography variant="body1" sx={{ mb: 2 }}>
+          A PDF is already loaded and ready for chat!
+        </Typography>
+        <Typography variant="body2">
+          Ask any questions about the document in the field below.
+        </Typography>
+      </>
+    ) : (
+      <>
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          Follow these steps to get started:
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 0.5 }}>
+          1. Upload a PDF document using the section above.
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 0.5 }}>
+          2. Wait for the processing to complete.
+        </Typography>
+        <Typography variant="body2">
+          3. Ask questions about your document.
+        </Typography>
+      </>
+    )}
+  </Box>
+);
 
 export default ChatWindow;
