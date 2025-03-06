@@ -27,7 +27,7 @@ services:
       - CHROMA_PROTOCOL=http
       - LOG_DIRECTORY=/app/logs
       - LOG_FILE=/app/logs/app.log
-      - LLM_MODEL=gpt-3.5-turbo
+      - LLM_MODEL=deepseek/deepseek-r1-distill-llama-70b:free
       - LLM_TEMPERATURE=0.7
       - LLM_MAX_LENGTH=4096
     volumes:

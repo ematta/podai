@@ -1,5 +1,7 @@
-import React from 'react';
-import { Box, Paper, Typography } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Paper, Typography, IconButton, Collapse } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 /**
  * Represents a chat message in the conversation
@@ -34,6 +36,42 @@ interface MessageBubbleProps {
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.type === 'user';
   const isSystem = message.type === 'system';
+  const [expandedThinking, setExpandedThinking] = useState(false);
+
+  // Process message content to separate thinking sections
+  const processMessageContent = () => {
+    const content = message.content;
+    
+    // Check if the message has a <think> section
+    if (message.type === 'assistant' && content.includes('<think>') && content.includes('</think>')) {
+      // Extract the thinking part and the rest of the message
+      const thinkStartIndex = content.indexOf('<think>');
+      const thinkEndIndex = content.indexOf('</think>') + '</think>'.length;
+      
+      const thinkingContent = content.substring(
+        thinkStartIndex + '<think>'.length, 
+        thinkEndIndex - '</think>'.length
+      );
+      
+      // Get the content before and after the thinking section
+      const beforeThinking = content.substring(0, thinkStartIndex);
+      const afterThinking = content.substring(thinkEndIndex);
+      
+      return {
+        hasThinking: true,
+        beforeThinking,
+        thinkingContent,
+        afterThinking
+      };
+    }
+    
+    return {
+      hasThinking: false,
+      content
+    };
+  };
+
+  const contentParts = processMessageContent();
 
   return (
     <Box
@@ -56,7 +94,47 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           borderRadius: 2,
         }}
       >
-        <Typography variant="body1">{message.content}</Typography>
+        {contentParts.hasThinking ? (
+          <>
+            {contentParts.beforeThinking && (
+              <Typography variant="body1">{contentParts.beforeThinking}</Typography>
+            )}
+            
+            <Box sx={{ mt: 1, mb: 1, borderLeft: '3px solid #ccc', pl: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  Thinking
+                </Typography>
+                <IconButton 
+                  size="small" 
+                  onClick={() => setExpandedThinking(!expandedThinking)}
+                  sx={{ ml: 1 }}
+                >
+                  {expandedThinking ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                </IconButton>
+              </Box>
+              
+              <Collapse in={expandedThinking}>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    whiteSpace: 'pre-wrap',
+                    color: 'text.secondary',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  {contentParts.thinkingContent}
+                </Typography>
+              </Collapse>
+            </Box>
+            
+            {contentParts.afterThinking && (
+              <Typography variant="body1">{contentParts.afterThinking}</Typography>
+            )}
+          </>
+        ) : (
+          <Typography variant="body1">{contentParts.content}</Typography>
+        )}
       </Paper>
     </Box>
   );

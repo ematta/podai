@@ -13,10 +13,13 @@ import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import routes
-from src.routes import upload_routes, chat_routes, health_routes, cors_proxy_routes
+from src.routes import upload_routes, chat_routes, health_routes, cors_proxy_routes, auth_routes
 
 # Import initializer for PDF hash mapping
 from src.routes.upload_routes import init_hash_map
+
+# Database setup
+from src.models.database import Base, engine
 
 # Use our enhanced logger
 from src.config.logger import setup_logger
@@ -111,14 +114,20 @@ app.include_router(upload_routes.router, prefix="/api/upload", tags=["upload"])
 app.include_router(chat_routes.router, prefix="/api/chat", tags=["chat"])
 app.include_router(health_routes.router, prefix="/api/health", tags=["health"])
 app.include_router(cors_proxy_routes.router, prefix="/api/proxy", tags=["proxy"])
+app.include_router(auth_routes.router, prefix="/api/auth", tags=["auth"])
 
-# Initialize PDF hash mapping on startup
+# Initialize database and setup on startup
 @app.on_event("startup")
 async def startup_event():
     # Log application startup
     logger.info("Application starting up")
     logger.info(f"Environment: {os.getenv('NODE_ENV', 'development')}")
     logger.info(f"Log level: {os.getenv('LOG_LEVEL', 'info')}")
+    
+    # Create all database tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables created")
     
     # Initialize the PDF hash map
     init_hash_map()

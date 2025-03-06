@@ -83,28 +83,34 @@ export const uploadPdfWithEmbeddings = async (
   }
 };
 
-const pollProgress = async (
+export const pollProgress = async (
   fileId: string,
   onProgressUpdate: (progress: number, message: string) => void
 ) => {
-  const pollInterval = setInterval(async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/pdf/progress/${fileId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch progress');
-      }
-      
-      const data = await response.json();
-      onProgressUpdate(data.progress, data.status);
-      
-      if (data.progress === 100 || data.status === 'completed') {
+  return new Promise((resolve, reject) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/pdf/progress/${fileId}`);
+        if (!response.ok) {
+          clearInterval(pollInterval);
+          reject(new Error('Failed to fetch progress'));
+          return;
+        }
+        
+        const data = await response.json();
+        onProgressUpdate(data.progress, data.status);
+        
+        if (data.progress === 100 || data.status === 'completed') {
+          clearInterval(pollInterval);
+          resolve(true);
+        }
+      } catch (error) {
+        console.error('Error polling progress:', error);
         clearInterval(pollInterval);
+        reject(error);
       }
-    } catch (error) {
-      console.error('Error polling progress:', error);
-      clearInterval(pollInterval);
-    }
-  }, 1000);
+    }, 1000);
+  });
 };
 
 export const getRagChatResponse = async (

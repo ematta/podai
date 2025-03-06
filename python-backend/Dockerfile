@@ -40,7 +40,7 @@ ENV CHROMA_PORT=8000
 ENV CHROMA_PROTOCOL=http
 ENV LOG_DIRECTORY=/app/logs
 ENV LOG_FILE=/app/logs/app.log
-ENV LLM_MODEL=gpt-3.5-turbo
+ENV LLM_MODEL=deepseek/deepseek-r1-distill-llama-70b:free
 ENV LLM_TEMPERATURE=0.7
 ENV LLM_MAX_LENGTH=4096
 

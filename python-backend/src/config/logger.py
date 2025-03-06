@@ -33,8 +33,8 @@ def setup_logger(name, log_level=None):
     # Add handler to logger
     logger.addHandler(console_handler)
     
-    # Always create a file handler with default path to /app/logs/app.log
-    logs_directory = os.environ.get('LOG_DIRECTORY', '/app/logs')
+    # Always create a file handler with default path to ./logs/app.log
+    logs_directory = os.environ.get('LOG_DIRECTORY', './logs')
     log_file = os.environ.get('LOG_FILE', f'{logs_directory}/app.log')
     
     # Ensure the directory exists

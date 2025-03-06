@@ -20,7 +20,7 @@ describe('PdfUploader Component', () => {
     expect(screen.getByText('Select PDF')).toBeInTheDocument();
     expect(screen.getByText('Clear')).toBeInTheDocument();
     // Upload button only shows when a file is selected
-    expect(screen.queryByText('Convert to Podcast Script')).not.toBeInTheDocument();
+    expect(screen.queryByText('Process PDF for Chat')).not.toBeInTheDocument();
   });
   
   it('shows the selected file name when a file is selected', () => {
@@ -41,7 +41,7 @@ describe('PdfUploader Component', () => {
     expect(screen.getByText('Selected PDF:')).toBeInTheDocument();
     expect(screen.getByText('test.pdf')).toBeInTheDocument();
     expect(screen.getByText('(0.00 MB)')).toBeInTheDocument();
-    expect(screen.getByText('Convert to Podcast Script')).toBeInTheDocument();
+    expect(screen.getByText('Process PDF for Chat')).toBeInTheDocument();
   });
   
   it('disables buttons when loading', () => {
@@ -77,7 +77,7 @@ describe('PdfUploader Component', () => {
       />
     );
     
-    const uploadButton = screen.getByText('Convert to Podcast Script');
+    const uploadButton = screen.getByText('Process PDF for Chat');
     await user.click(uploadButton);
     
     expect(mockOnUpload).toHaveBeenCalledTimes(1);

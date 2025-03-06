@@ -11,8 +11,8 @@ RUN apt-get update && \
 # Copy package files first for better caching
 COPY package*.json ./
 
-# Install dependencies with clean install
-RUN npm ci && \
+# Install dependencies (using npm install instead of npm ci for better compatibility)
+RUN npm install && \
     npm install --no-save esbuild esbuild-sass-plugin sass && \
     npm cache clean --force
 
