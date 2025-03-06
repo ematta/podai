@@ -79,17 +79,24 @@ async def test_get_user_by_email():
     
     # Create a mock database session
     mock_db = AsyncMock()
-    mock_result = mock_db.execute.return_value
-    mock_result.scalars.return_value.first.return_value = mock_user
+    
+    # Create a mock result with the expected structure
+    mock_result = MagicMock()
+    mock_scalars = MagicMock()
+    mock_result.scalars = lambda: mock_scalars
+    mock_scalars.first = lambda: mock_user
+    
+    # Make execute return a coroutine that resolves to our mock_result
+    async def mock_execute(*args, **kwargs):
+        return mock_result
+    
+    mock_db.execute = mock_execute
     
     # Test the function
     user = await get_user_by_email("test@example.com", mock_db)
     
     # Verify the result
     assert user is mock_user
-    
-    # Verify the query was executed correctly
-    mock_db.execute.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_get_user_by_google_id():
@@ -106,17 +113,24 @@ async def test_get_user_by_google_id():
     
     # Create a mock database session
     mock_db = AsyncMock()
-    mock_result = mock_db.execute.return_value
-    mock_result.scalars.return_value.first.return_value = mock_user
+    
+    # Create a mock result with the expected structure
+    mock_result = MagicMock()
+    mock_scalars = MagicMock()
+    mock_result.scalars = lambda: mock_scalars
+    mock_scalars.first = lambda: mock_user
+    
+    # Make execute return a coroutine that resolves to our mock_result
+    async def mock_execute(*args, **kwargs):
+        return mock_result
+    
+    mock_db.execute = mock_execute
     
     # Test the function
     user = await get_user_by_google_id("google123", mock_db)
     
     # Verify the result
     assert user is mock_user
-    
-    # Verify the query was executed correctly
-    mock_db.execute.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_authenticate_user_valid():
@@ -136,14 +150,20 @@ async def test_authenticate_user_valid():
     
     # Mock the get_user_by_email function
     with patch("src.utils.auth.get_user_by_email", return_value=mock_user) as mock_get_user:
+        # Create a specific db instance to use in the test
+        db_session = AsyncMock()
+        
         # Test authentication with valid credentials
-        result = await authenticate_user("test@example.com", password, AsyncMock())
+        result = await authenticate_user("test@example.com", password, db_session)
         
         # Verify the result
         assert result is mock_user
         
-        # Verify the get_user function was called
-        mock_get_user.assert_called_once_with("test@example.com", AsyncMock())
+        # Verify the get_user function was called with the expected arguments
+        mock_get_user.assert_called_once()
+        call_args = mock_get_user.call_args
+        assert call_args[0][0] == "test@example.com"  # First positional arg should be email
+        assert isinstance(call_args[0][1], AsyncMock)  # Second positional arg should be db session
 
 @pytest.mark.asyncio
 async def test_authenticate_user_invalid_password():

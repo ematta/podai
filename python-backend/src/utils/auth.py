@@ -43,12 +43,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 async def get_user_by_email(email: str, db: AsyncSession) -> Optional[User]:
     """Get a user by email"""
     result = await db.execute(select(User).where(User.email == email))
-    return result.scalars().first()
+    user = result.scalars().first()
+    return user
 
 async def get_user_by_google_id(google_id: str, db: AsyncSession) -> Optional[User]:
     """Get a user by Google ID"""
     result = await db.execute(select(User).where(User.google_id == google_id))
-    return result.scalars().first()
+    user = result.scalars().first()
+    return user
 
 async def authenticate_user(email: str, password: str, db: AsyncSession) -> Optional[User]:
     """Authenticate a user with email and password"""

@@ -26,12 +26,12 @@ async def test_get_google_user_info_success():
     }
     
     # Mock httpx.AsyncClient and response
-    mock_response = MagicMock()
+    mock_response = AsyncMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = mock_user_info
+    mock_response.json = AsyncMock(return_value=mock_user_info)
     
     mock_client = AsyncMock()
-    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value.get.return_value = mock_response
     
     # Mock httpx.AsyncClient context manager
     with patch('httpx.AsyncClient', return_value=mock_client):
@@ -42,7 +42,7 @@ async def test_get_google_user_info_success():
         assert result == mock_user_info
         
         # Verify the API call was made correctly
-        mock_client.get.assert_called_once_with(
+        mock_client.__aenter__.return_value.get.assert_called_once_with(
             "https://www.googleapis.com/oauth2/v3/userinfo",
             headers={"Authorization": "Bearer mock_token"}
         )
@@ -51,11 +51,11 @@ async def test_get_google_user_info_success():
 async def test_get_google_user_info_failure():
     """Test getting Google user info with a failed response."""
     # Mock unsuccessful response
-    mock_response = MagicMock()
+    mock_response = AsyncMock()
     mock_response.status_code = 401  # Unauthorized
     
     mock_client = AsyncMock()
-    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value.get.return_value = mock_response
     
     # Mock httpx.AsyncClient context manager
     with patch('httpx.AsyncClient', return_value=mock_client):
@@ -65,7 +65,8 @@ async def test_get_google_user_info_failure():
         # Verify result is None for unsuccessful response
         assert result is None
 
-def test_get_google_oauth_url():
+@pytest.mark.asyncio
+async def test_get_google_oauth_url():
     """Test getting the Google OAuth URL."""
     # Create a mock request
     mock_request = MagicMock(spec=Request)
@@ -74,10 +75,11 @@ def test_get_google_oauth_url():
     expected_url = "https://accounts.google.com/o/oauth2/auth?client_id=123&redirect_uri=..."
     
     with patch('src.utils.google_auth.oauth') as mock_oauth:
-        mock_oauth.google.authorize_redirect.return_value = expected_url
+        # Set up the mock to return an awaitable that returns the expected URL
+        mock_oauth.google.authorize_redirect = AsyncMock(return_value=expected_url)
         
         # Call the function
-        result = get_google_oauth_url(mock_request)
+        result = await get_google_oauth_url(mock_request)
         
         # Verify result
         assert result == expected_url
@@ -110,8 +112,9 @@ async def test_validate_google_token_success():
     with patch('src.utils.google_auth.oauth') as mock_oauth, \
          patch('src.utils.google_auth.get_google_user_info', return_value=mock_user_info) as mock_get_info:
         
-        # Configure the mock
-        mock_oauth.google.authorize_access_token.return_value = mock_token
+        # Configure the mocks
+        mock_oauth.google.authorize_access_token = AsyncMock(return_value=mock_token)
+        mock_get_info.return_value = mock_user_info
         
         # Call the function
         result = await validate_google_token(mock_request)
@@ -132,7 +135,7 @@ async def test_validate_google_token_failure():
     # Setup mocks
     with patch('src.utils.google_auth.oauth') as mock_oauth:
         # Configure the mock to return None (invalid token)
-        mock_oauth.google.authorize_access_token.return_value = None
+        mock_oauth.google.authorize_access_token = AsyncMock(return_value=None)
         
         # Call the function
         result = await validate_google_token(mock_request)
@@ -160,8 +163,8 @@ async def test_validate_google_token_with_user_info_failure():
     with patch('src.utils.google_auth.oauth') as mock_oauth, \
          patch('src.utils.google_auth.get_google_user_info', return_value=None) as mock_get_info:
         
-        # Configure the mock
-        mock_oauth.google.authorize_access_token.return_value = mock_token
+        # Configure the mocks
+        mock_oauth.google.authorize_access_token = AsyncMock(return_value=mock_token)
         
         # Call the function
         result = await validate_google_token(mock_request)

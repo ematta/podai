@@ -15,8 +15,8 @@ async def test_proxy_get_request(client):
     mock_response.headers = {"Content-Type": "application/json"}
     mock_response.content = b'{"data": "test response"}'
     
-    # Patch the httpx.AsyncClient.get method
-    with patch("httpx.AsyncClient.get", return_value=mock_response):
+    # Patch the httpx.AsyncClient.request method
+    with patch("httpx.AsyncClient.request", return_value=mock_response):
         # Test data
         target_url = "https://api.example.com/data"
         encoded_url = target_url.replace("/", "%2F").replace(":", "%3A")
@@ -38,8 +38,8 @@ async def test_proxy_post_request(client):
     mock_response.headers = {"Content-Type": "application/json"}
     mock_response.content = b'{"result": "created"}'
     
-    # Patch the httpx.AsyncClient.post method
-    with patch("httpx.AsyncClient.post", return_value=mock_response):
+    # Patch the httpx.AsyncClient.request method
+    with patch("httpx.AsyncClient.request", return_value=mock_response):
         # Test data
         target_url = "https://api.example.com/data"
         encoded_url = target_url.replace("/", "%2F").replace(":", "%3A")
@@ -59,8 +59,8 @@ async def test_proxy_post_request(client):
 @pytest.mark.asyncio
 async def test_proxy_error_handling(client):
     """Test error handling in the proxy."""
-    # Patch the httpx.AsyncClient.get method to raise an exception
-    with patch("httpx.AsyncClient.get", side_effect=Exception("Connection error")):
+    # Patch the httpx.AsyncClient.request method to raise an exception
+    with patch("httpx.AsyncClient.request", side_effect=Exception("Connection error")):
         # Test data
         target_url = "https://api.example.com/data"
         encoded_url = target_url.replace("/", "%2F").replace(":", "%3A")
@@ -91,8 +91,8 @@ async def test_proxy_text_response(client):
     mock_response.headers = {"Content-Type": "text/plain"}
     mock_response.content = b'Plain text response'
     
-    # Patch the httpx.AsyncClient.get method
-    with patch("httpx.AsyncClient.get", return_value=mock_response):
+    # Patch the httpx.AsyncClient.request method
+    with patch("httpx.AsyncClient.request", return_value=mock_response):
         # Test data
         target_url = "https://api.example.com/text"
         encoded_url = target_url.replace("/", "%2F").replace(":", "%3A")
@@ -114,8 +114,8 @@ async def test_proxy_http_error_response(client):
     mock_response.headers = {"Content-Type": "application/json"}
     mock_response.content = b'{"error": "Not found"}'
     
-    # Patch the httpx.AsyncClient.get method
-    with patch("httpx.AsyncClient.get", return_value=mock_response):
+    # Patch the httpx.AsyncClient.request method
+    with patch("httpx.AsyncClient.request", return_value=mock_response):
         # Test data
         target_url = "https://api.example.com/not-found"
         encoded_url = target_url.replace("/", "%2F").replace(":", "%3A")
