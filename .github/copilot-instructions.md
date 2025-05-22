@@ -7,6 +7,9 @@ Tech Stack:
 - nodejs 22
     - React UI
     - Material UI
+    - node-config
+    - fetch
+    - react-router-dom
 - Docker
     - Docker Compose
 - GitHub

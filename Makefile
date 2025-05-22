@@ -26,6 +26,20 @@ run:
 	@echo "Starting backend server..."
 	uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
+# Run the backend server in development mode (alias for run)
+dev_backend: run
+
+# Run the frontend development server
+dev_frontend:
+	@echo "Starting frontend development server..."
+	cd frontend && npm run dev
+
+# Run both backend and frontend in development mode concurrently
+dev:
+	@echo "Starting backend and frontend development servers..."
+	@make dev_backend & make dev_frontend & wait
+	@echo "Development servers stopped."
+
 # Clean up build artifacts and caches
 clean:
 	@echo "Cleaning up..."
