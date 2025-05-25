@@ -1,6 +1,8 @@
 from fastapi import APIRouter, File, UploadFile
 import shutil
 import os
+import tempfile
+import pymupdf4llm
 
 router = APIRouter()
 
@@ -26,3 +28,31 @@ async def upload_pdf_endpoint(file: UploadFile = File(...)):
         # Ensure the uploaded file is closed
         if hasattr(file, 'file') and hasattr(file.file, 'close'):
             file.file.close()
+
+@router.post("/parse", tags=["pdf"])
+async def parse_pdf_endpoint(file: UploadFile = File(...)):
+    if not file.filename:
+        return {"error": "No filename provided for uploaded file."}
+
+    try:
+        # Read the file content
+        file_content = await file.read()
+        
+        # Save to a temporary file since pymupdf4llm needs a file path
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            temp_file.write(file_content)
+            temp_file_path = temp_file.name
+        
+        try:
+            # Use pymupdf4llm to convert PDF to Markdown
+            markdown_content = pymupdf4llm.to_markdown(temp_file_path)
+            
+            return {"filename": file.filename, "content_markdown": markdown_content}
+        except Exception as e:
+            return {"error": str(e), "filename": file.filename} 
+        finally:
+            # Clean up the temporary file
+            os.unlink(temp_file_path)
+            
+    except Exception as e:
+        return {"error": str(e), "filename": file.filename}
