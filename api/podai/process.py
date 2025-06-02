@@ -3,6 +3,10 @@ import os
 from openai import OpenAI
 import pymupdf4llm
 from fastapi import UploadFile
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 
 async def parse_pdf_to_markdown(file: UploadFile):
