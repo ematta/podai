@@ -5,6 +5,7 @@ import datetime
 import json
 from dotenv import load_dotenv
 from .utils import cleanup_old_files, get_file_info
+from .mock_podcast import mock_process_podcast, get_mock_status
 
 # Load environment variables
 load_dotenv()
@@ -14,10 +15,25 @@ url = "https://api.segmind.com/v1/dia"
 
 def process_podcast(script: str):
     """
-    This function sends a request to the Segmind API to process a podcast script.
-    It prepares the data and files required for the API call, saves the response to temp folder,
-    and returns the file path.
+    This function processes a podcast script. It can use either:
+    1. Mock mode (for testing/development) - creates fake audio files
+    2. Real Segmind API (for production) - calls expensive external API
+    
+    Mode is controlled by environment variables:
+    - PODCAST_MOCK_MODE=true/false
+    - PODCAST_MOCK_DELAY=2.0 (seconds to simulate processing)
     """
+    
+    # Check if mock mode is enabled
+    mock_enabled = os.getenv("PODCAST_MOCK_MODE", "false").lower() == "true"
+    
+    if mock_enabled:
+        print("🎭 MOCK MODE ENABLED: Using mock podcast processing")
+        mock_delay = float(os.getenv("PODCAST_MOCK_DELAY", "2.0"))
+        return mock_process_podcast(script, delay_seconds=mock_delay)
+    
+    # Real API mode
+    print("🚀 REAL API MODE: Using Segmind API")
     
     # Check if API key is available
     if not api_key:
@@ -82,7 +98,8 @@ def process_podcast(script: str):
                     "file_path": file_path,
                     "filename": filename,
                     "content_type": content_type,
-                    "file_info": file_info
+                    "file_info": file_info,
+                    "mock_mode": False
                 }
             else:
                 # Handle JSON or text response
@@ -109,7 +126,8 @@ def process_podcast(script: str):
                                 "file_path": file_path,
                                 "filename": filename,
                                 "content_type": "audio/wav",
-                                "file_info": file_info
+                                "file_info": file_info,
+                                "mock_mode": False
                             }
                     
                     # Save JSON response as file for debugging
@@ -129,7 +147,8 @@ def process_podcast(script: str):
                         "filename": filename,
                         "content_type": "application/json",
                         "response_data": json_response,
-                        "file_info": file_info
+                        "file_info": file_info,
+                        "mock_mode": False
                     }
                 except ValueError:
                     # Handle non-JSON text response
@@ -148,9 +167,10 @@ def process_podcast(script: str):
                         "file_path": file_path,
                         "filename": filename,
                         "content_type": "text/plain",
-                        "file_info": file_info
+                        "file_info": file_info,
+                        "mock_mode": False
                     }
         else:
-            return {"error": f"Failed to process podcast: {response.status_code} - {response.text}"}
+            return {"error": f"Failed to process podcast: {response.status_code} - {response.text}", "mock_mode": False}
     except Exception as e:
-        return {"error": f"Exception occurred while processing podcast: {str(e)}"}
+        return {"error": f"Exception occurred while processing podcast: {str(e)}", "mock_mode": False}

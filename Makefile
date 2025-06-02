@@ -1,5 +1,5 @@
 \
-.PHONY: all install_backend install_frontend build_frontend run_backend run_frontend dev clean lint_frontend lint_backend format_backend install build
+.PHONY: all install_backend install_frontend build_frontend run_backend run_frontend dev clean lint_frontend lint_backend format_backend install build mock_on mock_off mock_status test_mock
 
 all: install_backend install_frontend build_frontend run_backend
 
@@ -51,3 +51,22 @@ format_backend:
 install: install_backend install_frontend
 
 build: build_frontend
+
+# Mock mode management
+mock_on:
+	@echo "🎭 Enabling mock mode..."
+	@python toggle_mock.py on
+
+mock_off:
+	@echo "🚀 Disabling mock mode..."
+	@python toggle_mock.py off
+
+mock_status:
+	@echo "📊 Mock mode status:"
+	@python toggle_mock.py status
+
+test_mock:
+	@echo "🧪 Testing mock mode..."
+	@make mock_on
+	@echo "Running test with mock mode..."
+	@uv run python test_podcast_api.py

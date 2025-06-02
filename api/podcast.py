@@ -4,16 +4,41 @@ from pydantic import BaseModel
 import os
 
 from api.podai.podcast import process_podcast
+from api.podai.mock_podcast import get_mock_status
 
 router = APIRouter()
 
 class PodcastRequest(BaseModel):
     script: str
 
+class MockToggleRequest(BaseModel):
+    enabled: bool
+    delay_seconds: float = 2.0
+
 @router.post("/conversion", tags=["podcast"])
 async def podcast_processing(request_body: PodcastRequest):
     print(f"Received podcast script: {request_body.script[:100]}...")
     return process_podcast(request_body.script)
+
+@router.get("/mock-status", tags=["podcast"])
+async def get_mock_mode_status():
+    """Get current mock mode status and configuration"""
+    return get_mock_status()
+
+@router.post("/mock-toggle", tags=["podcast"])
+async def toggle_mock_mode(request_body: MockToggleRequest):
+    """Toggle mock mode on/off (note: this only affects the current session)"""
+    # For a more persistent solution, you'd want to update a config file
+    # For now, we'll just set environment variables for the current process
+    os.environ["PODCAST_MOCK_MODE"] = "true" if request_body.enabled else "false"
+    os.environ["PODCAST_MOCK_DELAY"] = str(request_body.delay_seconds)
+    
+    return {
+        "success": True,
+        "mock_enabled": request_body.enabled,
+        "mock_delay": request_body.delay_seconds,
+        "message": f"Mock mode {'enabled' if request_body.enabled else 'disabled'} for current session"
+    }
 
 @router.get("/download/{filename}", tags=["podcast"])
 async def download_podcast_file(filename: str):

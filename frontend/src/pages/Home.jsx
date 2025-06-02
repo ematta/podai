@@ -1,9 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Switch from '@mui/material/Switch';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Chip from '@mui/material/Chip';
+import Paper from '@mui/material/Paper';
 import AppButton from "../components/Button";
 import { parsePdf } from "../client/parsePdf";
 import { createScript } from "../client/createScript";
@@ -25,6 +29,66 @@ export default function Home() {
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [snackbarSeverity, setSnackbarSeverity] = useState('success'); // Default to 'success'
+    
+    // Mock mode state
+    const [mockMode, setMockMode] = useState(false);
+    const [mockStatus, setMockStatus] = useState(null);
+    const [loadingMockStatus, setLoadingMockStatus] = useState(false);
+
+    // Fetch mock status on component mount
+    useEffect(() => {
+        fetchMockStatus();
+    }, []);
+
+    const fetchMockStatus = async () => {
+        setLoadingMockStatus(true);
+        try {
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const response = await fetch(`${apiUrl}/api/podcast/mock-status`);
+            if (response.ok) {
+                const status = await response.json();
+                setMockStatus(status);
+                setMockMode(status.mock_enabled);
+            }
+        } catch (error) {
+            console.error('Error fetching mock status:', error);
+        } finally {
+            setLoadingMockStatus(false);
+        }
+    };
+
+    const toggleMockMode = async (enabled) => {
+        try {
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const response = await fetch(`${apiUrl}/api/podcast/mock-toggle`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    enabled: enabled,
+                    delay_seconds: 2.0 
+                }),
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                setMockMode(enabled);
+                setSnackbarMessage(result.message);
+                setSnackbarSeverity('success');
+                setSnackbarOpen(true);
+                // Refresh status
+                await fetchMockStatus();
+            } else {
+                throw new Error('Failed to toggle mock mode');
+            }
+        } catch (error) {
+            console.error('Error toggling mock mode:', error);
+            setSnackbarMessage('Error: Failed to toggle mock mode');
+            setSnackbarSeverity('error');
+            setSnackbarOpen(true);
+        }
+    };
 
     const handleSnackbarClose = (event, reason) => {
         if (reason === 'clickaway') {
@@ -160,6 +224,49 @@ export default function Home() {
                 PodAI
             </Typography>
             
+            {/* Mock Mode Toggle Section */}
+            <Paper elevation={2} sx={{ p: 2, mb: 3, backgroundColor: '#f8f9fa' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Typography variant="h6">
+                            Development Mode
+                        </Typography>
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={mockMode}
+                                    onChange={(e) => toggleMockMode(e.target.checked)}
+                                    color="primary"
+                                    disabled={loadingMockStatus}
+                                />
+                            }
+                            label={mockMode ? "Mock Mode" : "Real API"}
+                        />
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Chip 
+                            label={mockMode ? "🎭 MOCK" : "🚀 REAL"} 
+                            color={mockMode ? "warning" : "success"}
+                            variant="filled"
+                        />
+                        {mockStatus && (
+                            <Chip 
+                                label={mockStatus.segmind_api_available ? "API Key ✓" : "API Key ✗"} 
+                                color={mockStatus.segmind_api_available ? "success" : "error"}
+                                variant="outlined"
+                                size="small"
+                            />
+                        )}
+                    </Box>
+                </Box>
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                    {mockMode ? 
+                        "⚡ Mock mode creates fake audio files instantly for testing without API costs" : 
+                        "💸 Real mode uses Segmind API - costs money per request"
+                    }
+                </Typography>
+            </Paper>
+
             <Box sx={{ mb: 3 }}>
                 <AppButton 
                     sx={{ color: 'gray', mr: 2 }} 
@@ -192,7 +299,7 @@ export default function Home() {
                     <Typography variant="body1" sx={{ mr: 2 }}>
                         {isLoading && "Parsing PDF..."}
                         {isGeneratingScript && "Generating Script..."}
-                        {isProcessingPodcast && "Processing Podcast..."}
+                        {isProcessingPodcast && (mockMode ? "🎭 Creating Mock Audio..." : "🚀 Processing with Segmind API...")}
                     </Typography>
                     <CircularProgress size={24} />
                 </Box>
@@ -274,6 +381,14 @@ export default function Home() {
                 <Box sx={{ mt: 3 }}>
                     <Typography variant="h6" gutterBottom>
                         Podcast Processing Result:
+                        {podcastResult.mock_mode && (
+                            <Chip 
+                                label="🎭 MOCK" 
+                                color="warning" 
+                                size="small" 
+                                sx={{ ml: 1 }}
+                            />
+                        )}
                     </Typography>
                     {podcastResult.audio_url ? (
                         <Box>
@@ -289,6 +404,11 @@ export default function Home() {
                         <Box>
                             <Typography variant="body1" sx={{ mb: 2 }}>
                                 Podcast generated successfully! File: {podcastResult.filename}
+                                {podcastResult.mock_mode && (
+                                    <Typography variant="body2" color="textSecondary" component="div" sx={{ mt: 1 }}>
+                                        🎭 This is a mock audio file (3 seconds of silence) created for testing
+                                    </Typography>
+                                )}
                             </Typography>
                             <Button
                                 variant="contained"
@@ -346,6 +466,31 @@ export default function Home() {
             <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
                 Upload a PDF, generate a podcast script, and then process it into audio.
             </Typography>
+
+            <Paper elevation={3} sx={{ p: 2, borderRadius: '8px', mb: 4 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                    Mock Mode
+                </Typography>
+                <FormControlLabel
+                    control={
+                        <Switch
+                            checked={mockMode}
+                            onChange={(e) => toggleMockMode(e.target.checked)}
+                            color="primary"
+                            disabled={loadingMockStatus}
+                        />
+                    }
+                    label={loadingMockStatus ? "Loading..." : (mockMode ? "Enabled" : "Disabled")}
+                />
+                {mockStatus && (
+                    <Chip
+                        label={`Mock API: ${mockStatus.mock_enabled ? "Enabled" : "Disabled"}`}
+                        color={mockStatus.mock_enabled ? "success" : "error"}
+                        variant="outlined"
+                        sx={{ mt: 1 }}
+                    />
+                )}
+            </Paper>
 
             <Snackbar
                 open={snackbarOpen}
