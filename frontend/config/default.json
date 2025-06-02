@@ -1,0 +1,5 @@
+{
+  "server": {
+    "apiUrl": "http://localhost:8000"
+  }
+}
