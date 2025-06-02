@@ -3,13 +3,15 @@ import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import AppButton from "../components/Button";
 import { parsePdf } from "../client/parsePdf";
 import { createScript } from "../client/createScript";
-import { processPodcast } from "../client/processPodcast";
+import { processPodcast, downloadPodcastFile } from "../client/processPodcast";
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
+import DownloadIcon from '@mui/icons-material/Download';
 
 export default function Home() {
     const [markdownContent, setMarkdownContent] = useState('');
@@ -102,6 +104,20 @@ export default function Home() {
             setSnackbarOpen(true);
         } finally {
             setIsGeneratingScript(false);
+        }
+    };
+
+    const handleDownloadPodcast = async (filename) => {
+        try {
+            await downloadPodcastFile(filename);
+            setSnackbarMessage('Download started successfully!');
+            setSnackbarSeverity('success');
+            setSnackbarOpen(true);
+        } catch (error) {
+            console.error('Download failed:', error);
+            setSnackbarMessage('Error: Failed to download file. Please try again.');
+            setSnackbarSeverity('error');
+            setSnackbarOpen(true);
         }
     };
 
@@ -265,9 +281,31 @@ export default function Home() {
                                 <source src={podcastResult.audio_url} type="audio/mpeg" />
                                 Your browser does not support the audio element.
                             </audio>
-                            <Typography variant="body2" color="textSecondary">
+                            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
                                 Audio URL: {podcastResult.audio_url}
                             </Typography>
+                        </Box>
+                    ) : podcastResult.success && podcastResult.filename ? (
+                        <Box>
+                            <Typography variant="body1" sx={{ mb: 2 }}>
+                                Podcast generated successfully! File: {podcastResult.filename}
+                            </Typography>
+                            <Button
+                                variant="contained"
+                                startIcon={<DownloadIcon />}
+                                onClick={() => handleDownloadPodcast(podcastResult.filename)}
+                                sx={{ mb: 2 }}
+                            >
+                                Download Audio File
+                            </Button>
+                            {podcastResult.downloadUrl && (
+                                <Box>
+                                    <audio controls style={{ width: '100%', marginBottom: '16px' }}>
+                                        <source src={podcastResult.downloadUrl} type="audio/wav" />
+                                        Your browser does not support the audio element.
+                                    </audio>
+                                </Box>
+                            )}
                         </Box>
                     ) : (
                         <TextField
